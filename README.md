@@ -50,6 +50,7 @@ Por isso o leitor usa `spreadsheets.get` com `includeGridData`: o endpoint
 | Saldo = soma simples da coluna `Valor` | Linhas negativas são pagamentos já feitos pela pessoa (`"que ela ja pagou  -200,00"`). |
 | `pago` na coluna `Situação` não salda nada | Refere-se ao estado da fatura do cartão, não ao acerto com a pessoa. |
 | O mês vem da **aba** | A coluna `Parcelas` não são datas: `02/03` é parcela 2 de 3, e também lá aparecem `3 ml`, `shopee 2`, `pg`. |
+| Lê a aba da próxima fatura a vencer | As abas são faturas, não meses de calendário. Até ao dia 15 conta a deste mês; depois, a do mês seguinte — a 23 de Setembro o que interessa é Outubro. |
 
 ### Valores escritos como texto
 
@@ -125,7 +126,8 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/sync
 | Quero… | Ficheiro |
 |---|---|
 | Acrescentar ou tirar uma pessoa | `lib/config.ts` → `PESSOAS` |
-| Ler mais meses | `.env` → `PLANILHA_ABAS` |
+| Ver outros meses | `.env` → `PLANILHA_ABAS=Setembro,Outubro` (vazio = automático) |
+| Mudar o dia de vencimento | `.env` → `DIA_VENCIMENTO` |
 | Um rótulo novo que não é pessoa | `lib/config.ts` → `ROTULOS_IGNORADOS` |
 | Mudar de R$ para € | `lib/config.ts` → `MOEDA` |
 | Sync mais ou menos frequente | `vercel.json` → `crons.schedule` |

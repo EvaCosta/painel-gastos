@@ -53,8 +53,39 @@ export async function lerPlanilha(): Promise<Aba[]> {
   const { token } = await jwt.getAccessToken();
   if (!token) throw new Error("Não foi possível autenticar na API do Google Sheets.");
 
+  const pedir = (url: string) =>
+    fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+
+  // Quais abas existem mesmo. Um pedido a uma aba inexistente rebenta o pedido
+  // todo, e a aba do mês seguinte pode ainda não ter sido criada — pedir os
+  // títulos primeiro custa pouco e evita isso.
+  const indice = await pedir(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}` +
+    `?fields=${encodeURIComponent("sheets.properties.title")}`,
+  );
+  if (!indice.ok) {
+    const corpo = await indice.text().catch(() => "");
+    throw new Error(
+      `Sheets API respondeu ${indice.status} ao listar as abas. Confirma que a planilha ` +
+      `está partilhada com ${email}. ${corpo.slice(0, 300)}`,
+    );
+  }
+  const titulos = new Set(
+    (((await indice.json()) as { sheets?: Array<{ properties?: { title?: string } }> }).sheets ?? [])
+      .map((f) => f.properties?.title)
+      .filter((t): t is string => Boolean(t)),
+  );
+
+  const existentes = ABAS.filter((a) => titulos.has(a));
+  if (!existentes.length) {
+    throw new Error(
+      `Nenhuma das abas pedidas existe na planilha: ${ABAS.join(", ")}. ` +
+      `As que lá estão são: ${[...titulos].join(", ")}.`,
+    );
+  }
+
   const params = new URLSearchParams({ includeGridData: "true" });
-  for (const aba of ABAS) params.append("ranges", `${aba}!A:N`);
+  for (const aba of existentes) params.append("ranges", `${aba}!A:N`);
   // Só os campos que usamos: a resposta completa desta planilha são muitos MB.
   params.set("fields", [
     "sheets.properties.title",
@@ -63,9 +94,8 @@ export async function lerPlanilha(): Promise<Aba[]> {
     "sheets.data.rowData.values.effectiveFormat.backgroundColor",
   ].join(","));
 
-  const resposta = await fetch(
+  const resposta = await pedir(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}?${params}`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
   );
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
