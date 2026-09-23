@@ -1,41 +1,58 @@
 /**
- * Configuração do painel — é aqui que se mexe quando a planilha muda.
+ * Configuração do painel.
  *
- * Nada neste ficheiro é secreto: os tokens de acesso vivem no Firestore,
- * e as credenciais em variáveis de ambiente.
+ * A planilha "Organização Mensal" tem uma aba por mês. Dentro de cada aba, a
+ * secção de pessoas começa num cabeçalho `Categoria | Parcelas | Compra |
+ * Valor | Situação | Cartao | … | Nome`, e o bloco de cada pessoa é uma célula
+ * FUNDIDA na coluna "Nome" que abrange todas as linhas dessa pessoa.
  */
 
 /** As pessoas que têm painel. O `slug` é o id no Firestore e nunca muda. */
 export const PESSOAS = [
-  { slug: "mae", nome: "Mãe", saudacao: "Oi, mãe", aliases: ["mae", "mãe", "mamae", "mamãe"] },
-  { slug: "ulisses", nome: "Ulisses", saudacao: "Oi, Ulisses", aliases: ["ulisses"] },
-  { slug: "fernando", nome: "Fernando", saudacao: "Oi, Fernando", aliases: ["fernando", "nando"] },
-  { slug: "heloisa", nome: "Heloísa", saudacao: "Oi, Heloísa", aliases: ["heloisa", "heloísa", "helo"] },
+  { slug: "mae",      nome: "Mãe",      saudacao: "Oi, mãe",      rotulos: ["mae", "mãe"] },
+  { slug: "ulisses",  nome: "Ulisses",  saudacao: "Oi, Ulisses",  rotulos: ["ulisses"] },
+  { slug: "fernando", nome: "Fernando", saudacao: "Oi, Fernando", rotulos: ["fernando"] },
+  { slug: "heloisa",  nome: "Heloiza",  saudacao: "Oi, Heloiza",  rotulos: ["heloiza", "heloisa"] },
+  { slug: "vo",       nome: "Vó",       saudacao: "Oi, vó",       rotulos: ["vo", "vó"] },
 ] as const;
 
 export type Slug = (typeof PESSOAS)[number]["slug"];
 
 /**
- * Cabeçalhos aceites para cada coluna da planilha, em minúsculas e sem acentos.
- * O leitor procura a primeira coluna cujo cabeçalho bata com um destes.
- * Se a planilha usar outro nome, acrescenta-o aqui — não é preciso mexer no resto.
+ * Rótulos que aparecem na coluna "Nome" mas NÃO são pessoas com painel.
+ * "Mercado" é o cartão da mãe — usá-lo não quer dizer que ela esteja a dever,
+ * por isso fica de fora. "VIAGEM JF" é uma despesa partilhada, tratada à parte.
  */
+export const ROTULOS_IGNORADOS = ["mercado", "viagem jf", "nome", "total", "soma geral"];
+
+/**
+ * Abas a ler. Cada entrada é o nome exacto da aba na planilha.
+ * As abas antigas (com sufixo de ano) ficam de fora por decisão do dono.
+ */
+export const ABAS = (process.env.PLANILHA_ABAS ?? "Setembro,Outubro,Novembro")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+
+/** Cabeçalhos da secção de pessoas, em minúsculas e sem acentos. */
 export const COLUNAS = {
-  data: ["data", "dia", "data da compra", "data do gasto", "quando"],
-  descricao: ["descricao", "descrição", "item", "gasto", "o que", "historico", "histórico", "detalhe"],
-  valor: ["valor", "preco", "preço", "quantia", "total", "custo"],
-  pessoa: ["pessoa", "quem", "de quem", "para quem", "responsavel", "responsável", "categoria", "marcado", "tag"],
-  pago: ["pago", "status", "situacao", "situação", "estado", "acertado", "quitado"],
+  categoria: ["categoria"],
+  parcelas: ["parcelas"],
+  descricao: ["compra"],
+  valor: ["valor"],
+  situacao: ["situacao", "situação"],
+  cartao: ["cartao", "cartão"],
+  nome: ["nome"],
 } as const;
 
-/** Valores da coluna `pago` que contam como já acertado. */
-export const VALORES_PAGO = [
-  "pago", "paga", "pagos", "pagas", "sim", "s", "x", "ok", "true", "quitado",
-  "acertado", "recebido", "1", "v", "✓", "✔",
-];
+/**
+ * Até onde vai o bloco de uma pessoa.
+ *  "fundida" — só as linhas da célula fundida na coluna Nome (conservador).
+ *  "cor"     — estende enquanto as linhas mantiverem a cor de fundo do bloco,
+ *              mesmo para lá da célula fundida.
+ * A planilha tem blocos onde a pintura vai mais longe do que a fusão; qual das
+ * duas é a verdade é decisão do dono.
+ */
+export const LIMITE_DO_BLOCO: "fundida" | "cor" =
+  (process.env.LIMITE_DO_BLOCO as "fundida" | "cor") ?? "fundida";
 
 /** Moeda em que os valores são mostrados. */
 export const MOEDA = { locale: "pt-BR", currency: "BRL" } as const;
-
-/** Nome da aba da planilha a ler. Vazio = a primeira aba. */
-export const ABA = process.env.PLANILHA_ABA ?? "";

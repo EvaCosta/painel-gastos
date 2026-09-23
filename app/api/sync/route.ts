@@ -35,8 +35,8 @@ export async function GET(pedido: Request) {
   }
 
   try {
-    const linhas = await lerPlanilha();
-    const { porPessoa, lidas, ignoradas, avisos } = await extrairLancamentos(linhas);
+    const abas = await lerPlanilha();
+    const { porPessoa, lidas, ignoradas, avisos } = await extrairLancamentos(abas);
 
     const resultado: ResultadoSync = { lidas, ignoradas, porPessoa: {}, avisos };
 

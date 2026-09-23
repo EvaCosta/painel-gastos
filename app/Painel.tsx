@@ -17,27 +17,29 @@ function Pastilha({ pago }: { pago: boolean }) {
           <path d="M6 3.5v2.8l1.8 1.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       )}
-      <span>{pago ? "Pago" : "Em aberto"}</span>
+      <span>{pago ? "Você pagou" : "Em aberto"}</span>
     </span>
   );
 }
 
 function Linha({ lancamento }: { lancamento: Lancamento }) {
+  const abatimento = lancamento.valor < 0;
   return (
-    <li className={`item${lancamento.pago ? " paid" : ""}`}>
+    <li className={`item${abatimento ? " paid" : ""}`}>
       <span className="desc">{lancamento.descricao}</span>
       <span className="val">{fmtDinheiro(lancamento.valor)}</span>
       <span className="meta">
-        {lancamento.data === SEM_DATA ? "Sem data" : fmtDia(lancamento.data)}
+        {[lancamento.mes, lancamento.data === SEM_DATA ? null : fmtDia(lancamento.data), lancamento.nota]
+          .filter(Boolean).join(" · ")}
       </span>
-      <span className="pillwrap"><Pastilha pago={lancamento.pago} /></span>
+      <span className="pillwrap"><Pastilha pago={lancamento.valor < 0} /></span>
     </li>
   );
 }
 
 export default function Painel({ dados, comoAcertar }: { dados: DadosPainel; comoAcertar?: string }) {
   const lancamentos = [...dados.lancamentos].sort((a, b) => b.data.localeCompare(a.data));
-  const abertos = lancamentos.filter((l) => !l.pago);
+  const abertos = lancamentos.filter((l) => l.valor > 0);
 
   const maisAntigo = abertos.length ? abertos[abertos.length - 1].data : null;
 
@@ -69,8 +71,8 @@ export default function Painel({ dados, comoAcertar }: { dados: DadosPainel; com
             : `Somando ${abertos.length} ${abertos.length === 1 ? "lançamento" : "lançamentos"} ainda não pagos.`}
         </p>
         <dl className="stats">
-          <div><dt>Já acertado</dt><dd>{fmtDinheiro(dados.totalPago)}</dd></div>
-          <div><dt>Em aberto</dt><dd>{abertos.length}</dd></div>
+          <div><dt>Já pago por você</dt><dd>{fmtDinheiro(dados.totalPago)}</dd></div>
+          <div><dt>Itens</dt><dd>{abertos.length}</dd></div>
           <div><dt>Mais antigo</dt><dd>{maisAntigo && maisAntigo !== SEM_DATA ? fmtDiaCurto(maisAntigo) : "—"}</dd></div>
         </dl>
       </section>

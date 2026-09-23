@@ -5,9 +5,13 @@ export type Lancamento = {
   /** ISO `YYYY-MM-DD`. */
   data: string;
   descricao: string;
-  /** Em unidades da moeda (ex.: 186.4), nunca em cêntimos. */
+  /** Em unidades da moeda (ex.: 186.4), nunca em cêntimos. Negativo = pagamento já feito. */
   valor: number;
   pago: boolean;
+  /** Aba de origem, ex. "Setembro". */
+  mes: string;
+  /** Cartão e situação, como estão na planilha. */
+  nota: string;
 };
 
 export type Painel = {

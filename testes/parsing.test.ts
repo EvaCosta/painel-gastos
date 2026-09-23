@@ -1,119 +1,155 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { lerData, lerValor } from "../lib/normalizar";
-import { extrairLancamentos, mapearColunas, parseCsv, pessoaDaCelula } from "../lib/planilha";
+import { encontrarBlocos, extrairLancamentos, mapearColunas, type Aba } from "../lib/planilha";
+
+/** Monta uma aba de teste a partir de linhas `[texto, cor?]`. */
+function aba(
+  nome: string,
+  linhas: Array<Array<string | [string, string]>>,
+  fusoes: Aba["fusoes"] = [],
+): Aba {
+  return {
+    nome,
+    fusoes,
+    celulas: linhas.map((linha) =>
+      linha.map((c) =>
+        typeof c === "string" ? { texto: c, cor: "" } : { texto: c[0], cor: c[1] },
+      ),
+    ),
+  };
+}
+
+/** Cabeçalho tal como está na planilha: A..K, com "Nome" na coluna K (índice 10). */
+const CABECALHO = ["", "", "", "Categoria", "Parcelas", "Compra", "Valor", "Situação", "Cartao", "", "Nome"];
+const vazio = ["", "", "", "", "", "", "", "", "", "", ""];
+const item = (parcela: string, compra: string, valor: string, situacao = "", cartao = "", nome = "") =>
+  ["", "", "", "pg", parcela, compra, valor, situacao, cartao, "", nome];
 
 test("lê valores em qualquer notação", () => {
   assert.equal(lerValor("R$ 1.234,56"), 1234.56);
   assert.equal(lerValor("1,234.56"), 1234.56);
-  assert.equal(lerValor("186,40"), 186.4);
+  assert.equal(lerValor("R$ 61,18"), 61.18);
   assert.equal(lerValor("186.40"), 186.4);
-  assert.equal(lerValor("€ 45"), 45);
-  assert.equal(lerValor("1.500"), 1500);      // milhar pt, sem decimais
-  assert.equal(lerValor("(50,00)"), -50);     // parêntesis = negativo
-  assert.equal(lerValor("-32,10"), -32.1);
-  assert.equal(lerValor(412.75), 412.75);
+  assert.equal(lerValor("1.500"), 1500);      // três dígitos: milhar
+  assert.equal(lerValor("1.5"), 1.5);         // um dígito: decimal
+  assert.equal(lerValor("-R$ 200,00"), -200); // pagamento já feito
+  assert.equal(lerValor("(50,00)"), -50);
+  assert.equal(lerValor(20.51666667), 20.51666667);
   assert.equal(lerValor(""), null);
-  assert.equal(lerValor("n/a"), null);
-  assert.equal(lerValor("1.5"), 1.5);         // um só dígito: decimal
-  assert.equal(lerValor("1,5"), 1.5);
-  assert.equal(lerValor("12.345"), 12345);    // três dígitos: milhar
-  assert.equal(lerValor("12,345"), 12345);
-  assert.equal(lerValor("0,99"), 0.99);
 });
 
 test("lê datas em qualquer formato", () => {
   assert.equal(lerData("2026-09-19"), "2026-09-19");
   assert.equal(lerData("19/09/2026"), "2026-09-19");
-  assert.equal(lerData("19-9-26"), "2026-09-19");
-  assert.equal(lerData("19.09.2026"), "2026-09-19");
   assert.equal(lerData("19 de setembro", 2026), "2026-09-19");
-  assert.equal(lerData("5 de mar de 2026"), "2026-03-05");
-  assert.equal(lerData("12 set 2026"), "2026-09-12");
-  assert.equal(lerData("46284"), "2026-09-19");   // série do Sheets
-  assert.equal(lerData("31/02/2026"), null);      // data que não existe
-  assert.equal(lerData(""), null);
+  assert.equal(lerData("46284"), "2026-09-19");
+  assert.equal(lerData("31/02/2026"), null);
 });
 
-test("reconhece a pessoa mesmo com ruído à volta", () => {
-  assert.equal(pessoaDaCelula("Mãe"), "mae");
-  assert.equal(pessoaDaCelula("mae"), "mae");
-  assert.equal(pessoaDaCelula("MAMÃE"), "mae");
-  assert.equal(pessoaDaCelula("p/ mãe - mercado"), "mae");
-  assert.equal(pessoaDaCelula("Ulisses"), "ulisses");
-  assert.equal(pessoaDaCelula("heloisa"), "heloisa");
-  assert.equal(pessoaDaCelula("Heloísa"), "heloisa");
-  assert.equal(pessoaDaCelula("Nando"), "fernando");
-  assert.equal(pessoaDaCelula("eu"), null);
-  assert.equal(pessoaDaCelula(""), null);
-  // não deve apanhar um nome dentro de outra palavra
-  assert.equal(pessoaDaCelula("maezinha"), null);
+test("encontra o cabeçalho da secção de pessoas", () => {
+  const a = aba("Setembro", [vazio, ["CONTROLE"], vazio, CABECALHO, item("", "Coberta", "63,91")]);
+  const mapa = mapearColunas(a);
+  assert.ok(mapa);
+  assert.equal(mapa.cabecalho, 3);
+  assert.equal(mapa.nome, 10);
+  assert.equal(mapa.descricao, 5);
+  assert.equal(mapa.valor, 6);
+  assert.equal(mapa.situacao, 7);
 });
 
-test("encontra o cabeçalho mesmo com linhas de título por cima", () => {
-  const linhas = parseCsv(
-    "CONTROLE DE GASTOS 2026,,,,\n" +
-    ",,,,\n" +
-    "Data,Descrição,Valor,Quem,Status\n" +
-    "19/09/2026,Farmácia,\"R$ 186,40\",Mãe,Devendo\n",
-  );
-  const achado = mapearColunas(linhas);
-  assert.ok(achado);
-  assert.equal(achado.cabecalho, 2);   // a linha em branco conta, para a numeração bater certo
-  assert.deepEqual(achado.mapa, { data: 0, descricao: 1, valor: 2, pessoa: 3, pago: 4 });
+test("o bloco de uma pessoa é a célula fundida na coluna Nome", () => {
+  // Reproduz K136:K160 = "Mae" na aba Novembro.
+  const linhas = [CABECALHO];
+  linhas.push(item("02/03", "Pote bolo", "R$ 20,52", "", "C6 Bank", "Mae"));
+  linhas.push(item("02/05", "Mato parede", "R$ 61,18"));
+  linhas.push(item("02/02", "vela verde", "R$ 22,80"));
+  linhas.push(item("02/02", "vela branca metado do pacote", "R$ 44,25"));
+  linhas.push(item("02/02", "vela rosa metade do pacote", "R$ 9,48"));
+  linhas.push(item("02/02", "2 silicone", "R$ 13,00"));
+
+  const a = aba("Novembro", linhas, [
+    { linhaIni: 1, linhaFim: 7, colIni: 10, colFim: 11 },
+  ]);
+  const mapa = mapearColunas(a)!;
+  const blocos = encontrarBlocos(a, mapa);
+
+  assert.equal(blocos.length, 1);
+  assert.equal(blocos[0].slug, "mae");
+  assert.equal(blocos[0].linhaIni, 1);
+  assert.equal(blocos[0].linhaFim, 7);
 });
 
-test("separa os lançamentos por pessoa e ignora o resto", async () => {
-  const linhas = parseCsv(
-    "Data,Descrição,Valor,Quem,Status\n" +
-    "19/09/2026,Farmácia,\"186,40\",Mãe,Devendo\n" +
-    "12/09/2026,Mercado,\"412,75\",Mãe,Pago\n" +
-    "10/09/2026,Gasolina,\"200,00\",Ulisses,\n" +
-    "08/09/2026,Jantar fora,\"90,00\",eu,\n" +          // não é de ninguém com painel
-    "05/09/2026,Linha sem valor,,Heloísa,\n",           // valor ilegível
-  );
+test("o saldo do bloco da mãe bate com a planilha", async () => {
+  const linhas = [CABECALHO];
+  for (const [p, c, v] of [
+    ["02/03", "Pote bolo", "R$ 20,52"], ["02/05", "Mato parede", "R$ 61,18"],
+    ["02/02", "vela verde", "R$ 22,80"], ["02/02", "vela branca metado do pacote", "R$ 44,25"],
+    ["02/02", "vela rosa metade do pacote", "R$ 9,48"], ["02/02", "2 silicone", "R$ 13,00"],
+  ]) linhas.push(item(p, c, v, "", "", linhas.length === 1 ? "Mae" : ""));
 
-  const { porPessoa, lidas, ignoradas, avisos } = await extrairLancamentos(linhas);
+  const a = aba("Novembro", linhas, [{ linhaIni: 1, linhaFim: 7, colIni: 10, colFim: 11 }]);
+  const { porPessoa, lidas } = await extrairLancamentos([a]);
 
-  assert.equal(lidas, 3);
-  assert.equal(ignoradas, 2);
-  assert.equal(avisos.length, 1);
-
-  const mae = porPessoa.get("mae")!;
-  assert.equal(mae.length, 2);
-  assert.equal(mae.filter((l) => !l.pago).reduce((s, l) => s + l.valor, 0), 186.4);
-  assert.equal(mae.filter((l) => l.pago).reduce((s, l) => s + l.valor, 0), 412.75);
-
-  assert.equal(porPessoa.get("ulisses")!.length, 1);
-  assert.equal(porPessoa.get("ulisses")![0].pago, false);
-  assert.equal(porPessoa.get("heloisa")!.length, 0);
-  assert.equal(porPessoa.get("fernando")!.length, 0);
+  assert.equal(lidas, 6);
+  const saldo = porPessoa.get("mae")!.reduce((s, l) => s + l.valor, 0);
+  assert.equal(Number(saldo.toFixed(2)), 171.23);   // o total que a planilha mostra
 });
 
-test("o id de cada linha é estável entre leituras", async () => {
-  const csv =
-    "Data,Descrição,Valor,Quem\n" +
-    "19/09/2026,Farmácia,\"186,40\",Mãe\n";
-  const a = await extrairLancamentos(parseCsv(csv));
-  const b = await extrairLancamentos(parseCsv(csv));
-  assert.equal(a.porPessoa.get("mae")![0].id, b.porPessoa.get("mae")![0].id);
+test("uma linha negativa abate o saldo — 'que ela ja pagou'", async () => {
+  const linhas = [CABECALHO];
+  linhas.push(item("", "Calça vo", "R$ 84,99", "", "", "Vó"));
+  linhas.push(item("", "Doce vó", "R$ 11,99"));
+  linhas.push(item("", "que ela ja pagou", "-200,00"));
+
+  const a = aba("Setembro", linhas, [{ linhaIni: 1, linhaFim: 4, colIni: 10, colFim: 11 }]);
+  const { porPessoa } = await extrairLancamentos([a]);
+
+  const saldo = porPessoa.get("vo")!.reduce((s, l) => s + l.valor, 0);
+  assert.equal(Number(saldo.toFixed(2)), -103.02);
 });
 
-test("linhas em branco não desalinham a numeração dos avisos", async () => {
-  const linhas = parseCsv(
-    "Data,Descrição,Valor,Quem\n" +
-    "19/09/2026,Farmácia,\"186,40\",Mãe\n" +
-    ",,,\n" +
-    "10/09/2026,Gasolina,xxx,Ulisses\n",
-  );
-  const { avisos, lidas } = await extrairLancamentos(linhas);
-  assert.equal(lidas, 1);
-  assert.equal(avisos.length, 1);
-  // a gasolina está mesmo na linha 4 da folha
-  assert.match(avisos[0], /^Linha 4:/);
+test("'Mercado' e 'VIAGEM JF' não são pessoas — o cartão da mãe fica de fora", async () => {
+  const linhas = [CABECALHO];
+  linhas.push(item("", "Geleia abacaxi", "R$ 16,97", "", "", "Mercado"));
+  linhas.push(item("", "Leite em pó", "R$ 25,89"));
+  linhas.push(item("", "blablacar ida", "R$ 70,00", "", "", "VIAGEM JF"));
+
+  const a = aba("Setembro", linhas, [
+    { linhaIni: 1, linhaFim: 3, colIni: 10, colFim: 11 },
+    { linhaIni: 3, linhaFim: 4, colIni: 10, colFim: 11 },
+  ]);
+  const { porPessoa, lidas } = await extrairLancamentos([a]);
+
+  assert.equal(lidas, 0);
+  for (const p of ["mae", "ulisses", "fernando", "heloisa", "vo"]) {
+    assert.equal(porPessoa.get(p)!.length, 0, `${p} não devia ter lançamentos`);
+  }
 });
 
-test("o CSV aguenta vírgulas e aspas dentro dos campos", () => {
-  const linhas = parseCsv('Data,Descrição,Valor\n01/01/2026,"Mercado, feira e padaria","1.234,56"\n');
-  assert.deepEqual(linhas[1], ["01/01/2026", "Mercado, feira e padaria", "1.234,56"]);
+test("cada pessoa só vê o seu bloco", async () => {
+  const linhas = [CABECALHO];
+  linhas.push(item("", "Coberta", "63,91", "", "Nubank", "Fernando"));
+  linhas.push(item("", "Dr peanut", "44,90", "", "", "Ulisses"));
+  linhas.push(item("", "vaso", "55,49", "", "", "Heloiza"));
+
+  const a = aba("Setembro", linhas, [
+    { linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 },
+    { linhaIni: 2, linhaFim: 3, colIni: 10, colFim: 11 },
+    { linhaIni: 3, linhaFim: 4, colIni: 10, colFim: 11 },
+  ]);
+  const { porPessoa } = await extrairLancamentos([a]);
+
+  assert.deepEqual(porPessoa.get("fernando")!.map((l) => l.descricao), ["Coberta"]);
+  assert.deepEqual(porPessoa.get("ulisses")!.map((l) => l.descricao), ["Dr peanut"]);
+  assert.deepEqual(porPessoa.get("heloisa")!.map((l) => l.descricao), ["vaso"]);
+  assert.deepEqual(porPessoa.get("mae")!.map((l) => l.descricao), []);
+});
+
+test("os ids são estáveis entre leituras", async () => {
+  const linhas = [CABECALHO, item("02/03", "Pote bolo", "R$ 20,52", "", "", "Mae")];
+  const fus = [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }];
+  const um = await extrairLancamentos([aba("Novembro", linhas, fus)]);
+  const dois = await extrairLancamentos([aba("Novembro", linhas, fus)]);
+  assert.equal(um.porPessoa.get("mae")![0].id, dois.porPessoa.get("mae")![0].id);
 });

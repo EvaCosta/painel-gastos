@@ -1,147 +1,185 @@
 import { JWT } from "google-auth-library";
-import { ABA, COLUNAS, PESSOAS, VALORES_PAGO } from "./config";
+import { ABAS, COLUNAS, LIMITE_DO_BLOCO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
 import { chave, idDaLinha, lerData, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
 
-type Linhas = string[][];
+/** Uma aba, já reduzida ao que nos interessa. */
+export type Aba = {
+  nome: string;
+  /** `celulas[linha][coluna]` — 0-indexado, como a API devolve. */
+  celulas: Array<Array<{ texto: string; cor: string } | null>>;
+  /** Células fundidas, em índices 0-based semi-abertos. */
+  fusoes: Array<{ linhaIni: number; linhaFim: number; colIni: number; colFim: number }>;
+};
+
+type Cor = { red?: number; green?: number; blue?: number };
+
+function hex({ red = 0, green = 0, blue = 0 }: Cor): string {
+  const b = (n: number) => Math.round(n * 255).toString(16).padStart(2, "0");
+  return (b(red) + b(green) + b(blue)).toUpperCase();
+}
 
 /**
- * Lê a planilha. Duas vias, pela ordem:
- *  1. API do Sheets com conta de serviço — a folha continua privada.
- *  2. CSV publicado (`PLANILHA_CSV_URL`) — mais simples de configurar, mas
- *     quem souber o link lê a folha toda.
+ * Lê as abas pedidas com formatação e células fundidas.
+ *
+ * Tem de ser `spreadsheets.get` com `includeGridData`: o endpoint `values`
+ * devolve só texto, e aqui a estrutura vive nas fusões da coluna "Nome".
  */
-export async function lerPlanilha(): Promise<Linhas> {
+export async function lerPlanilha(): Promise<Aba[]> {
   const id = process.env.PLANILHA_ID;
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const chavePrivada = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
-  if (id && email && chavePrivada) return lerViaApi(id, email, chavePrivada);
+  if (!id || !email || !chavePrivada) {
+    throw new Error(
+      "Planilha não configurada: faltam PLANILHA_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL ou GOOGLE_PRIVATE_KEY.",
+    );
+  }
 
-  const csv = process.env.PLANILHA_CSV_URL;
-  if (csv) return lerViaCsv(csv);
-
-  throw new Error(
-    "Planilha não configurada: define PLANILHA_ID + GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY, ou PLANILHA_CSV_URL.",
-  );
-}
-
-async function lerViaApi(id: string, email: string, key: string): Promise<Linhas> {
   const jwt = new JWT({
-    email,
-    key,
+    email, key: chavePrivada,
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });
   const { token } = await jwt.getAccessToken();
   if (!token) throw new Error("Não foi possível autenticar na API do Google Sheets.");
 
-  const intervalo = encodeURIComponent(ABA ? `${ABA}!A:Z` : "A:Z");
-  const url =
-    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}` +
-    `/values/${intervalo}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE` +
-    `&dateTimeRenderOption=FORMATTED_STRING`;
+  const params = new URLSearchParams({ includeGridData: "true" });
+  for (const aba of ABAS) params.append("ranges", `${aba}!A:N`);
+  // Só os campos que usamos: a resposta completa desta planilha são muitos MB.
+  params.set("fields", [
+    "sheets.properties.title",
+    "sheets.merges",
+    "sheets.data.rowData.values.formattedValue",
+    "sheets.data.rowData.values.effectiveFormat.backgroundColor",
+  ].join(","));
 
-  const resposta = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
+  const resposta = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}?${params}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
     throw new Error(
-      `Sheets API respondeu ${resposta.status}. ` +
-      `Confirma que a folha está partilhada com ${email}. ${corpo.slice(0, 300)}`,
+      `Sheets API respondeu ${resposta.status}. Confirma que a planilha está partilhada ` +
+      `com ${email}. ${corpo.slice(0, 300)}`,
     );
   }
 
-  const dados = (await resposta.json()) as { values?: unknown[][] };
-  return (dados.values ?? []).map((linha) => linha.map((c) => String(c ?? "")));
+  const dados = (await resposta.json()) as {
+    sheets?: Array<{
+      properties?: { title?: string };
+      merges?: Array<{ startRowIndex?: number; endRowIndex?: number; startColumnIndex?: number; endColumnIndex?: number }>;
+      data?: Array<{ rowData?: Array<{ values?: Array<{ formattedValue?: string; effectiveFormat?: { backgroundColor?: Cor } }> }> }>;
+    }>;
+  };
+
+  return (dados.sheets ?? []).map((folha) => ({
+    nome: folha.properties?.title ?? "",
+    fusoes: (folha.merges ?? []).map((m) => ({
+      linhaIni: m.startRowIndex ?? 0,
+      linhaFim: m.endRowIndex ?? 0,
+      colIni: m.startColumnIndex ?? 0,
+      colFim: m.endColumnIndex ?? 0,
+    })),
+    celulas: (folha.data?.[0]?.rowData ?? []).map((linha) =>
+      (linha.values ?? []).map((c) =>
+        c?.formattedValue === undefined && !c?.effectiveFormat?.backgroundColor
+          ? null
+          : { texto: c.formattedValue ?? "", cor: hex(c.effectiveFormat?.backgroundColor ?? {}) },
+      ),
+    ),
+  }));
 }
 
-async function lerViaCsv(url: string): Promise<Linhas> {
-  const resposta = await fetch(url, { cache: "no-store" });
-  if (!resposta.ok) throw new Error(`CSV da planilha respondeu ${resposta.status}.`);
-  return parseCsv(await resposta.text());
+const texto = (aba: Aba, l: number, c: number) => aba.celulas[l]?.[c]?.texto?.trim() ?? "";
+const corDe = (aba: Aba, l: number, c: number) => aba.celulas[l]?.[c]?.cor ?? "";
+
+/** Onde estão as colunas da secção de pessoas, e em que linha está o cabeçalho. */
+export type Mapa = {
+  cabecalho: number;
+  categoria: number; parcelas: number; descricao: number;
+  valor: number; situacao: number; cartao: number; nome: number;
+};
+
+export function mapearColunas(aba: Aba): Mapa | null {
+  for (let l = 0; l < aba.celulas.length; l++) {
+    const celulas = (aba.celulas[l] ?? []).map((c) => chave(c?.texto ?? ""));
+    const acha = (aceites: readonly string[]) =>
+      celulas.findIndex((v) => v !== "" && aceites.includes(v));
+
+    const nome = acha(COLUNAS.nome);
+    const valor = acha(COLUNAS.valor);
+    const descricao = acha(COLUNAS.descricao);
+    if (nome < 0 || valor < 0 || descricao < 0) continue;
+
+    return {
+      cabecalho: l, nome, valor, descricao,
+      categoria: acha(COLUNAS.categoria),
+      parcelas: acha(COLUNAS.parcelas),
+      situacao: acha(COLUNAS.situacao),
+      cartao: acha(COLUNAS.cartao),
+    };
+  }
+  return null;
 }
 
-/** Parser de CSV com aspas e quebras de linha dentro de campos. */
-export function parseCsv(texto: string): Linhas {
-  const linhas: Linhas = [];
-  let campo = "";
-  let linha: string[] = [];
-  let entreAspas = false;
+const POR_ROTULO = new Map<string, string>(
+  PESSOAS.flatMap((p) => p.rotulos.map((r) => [chave(r), p.slug] as const)),
+);
+const IGNORADOS = new Set(ROTULOS_IGNORADOS.map(chave));
 
-  for (let i = 0; i < texto.length; i++) {
-    const c = texto[i];
+/** Um bloco de pessoa dentro de uma aba. */
+export type Bloco = { slug: string; rotulo: string; linhaIni: number; linhaFim: number };
 
-    if (entreAspas) {
-      if (c === '"') {
-        if (texto[i + 1] === '"') { campo += '"'; i++; } else { entreAspas = false; }
-      } else campo += c;
-      continue;
+/**
+ * Encontra os blocos de pessoa: cada célula fundida na coluna "Nome" cujo
+ * texto seja o nome de alguém com painel.
+ *
+ * Com LIMITE_DO_BLOCO="cor", o bloco estende-se para lá da fusão enquanto as
+ * linhas seguintes mantiverem a mesma cor de fundo na coluna do valor —
+ * há blocos na planilha pintados mais abaixo do que a célula fundida.
+ */
+export function encontrarBlocos(aba: Aba, mapa: Mapa): Bloco[] {
+  const blocos: Bloco[] = [];
+
+  for (const fusao of aba.fusoes) {
+    if (fusao.colIni !== mapa.nome) continue;
+    if (fusao.linhaIni <= mapa.cabecalho) continue;
+
+    const rotulo = texto(aba, fusao.linhaIni, mapa.nome);
+    const k = chave(rotulo);
+    if (!k || IGNORADOS.has(k)) continue;
+
+    const slug = POR_ROTULO.get(k);
+    if (!slug) continue;
+
+    let linhaFim = fusao.linhaFim;
+
+    if (LIMITE_DO_BLOCO === "cor") {
+      const cor = corDe(aba, fusao.linhaIni, mapa.valor);
+      if (cor) {
+        while (
+          linhaFim < aba.celulas.length &&
+          corDe(aba, linhaFim, mapa.valor) === cor &&
+          !aba.fusoes.some((f) => f.colIni === mapa.nome && f.linhaIni === linhaFim)
+        ) linhaFim++;
+      }
     }
 
-    if (c === '"') { entreAspas = true; }
-    else if (c === ",") { linha.push(campo); campo = ""; }
-    else if (c === "\n" || c === "\r") {
-      if (c === "\r" && texto[i + 1] === "\n") i++;
-      linha.push(campo); campo = "";
-      linhas.push(linha); linha = [];
-    } else campo += c;
+    blocos.push({ slug, rotulo, linhaIni: fusao.linhaIni, linhaFim });
   }
-  if (campo || linha.length) { linha.push(campo); linhas.push(linha); }
 
-  // As linhas vazias ficam: é o que mantém a numeração alinhada com a folha,
-  // para um aviso dizer "linha 47" e ser mesmo a 47 no Sheets.
-  while (linhas.length && linhas[linhas.length - 1].every((c) => c.trim() === "")) linhas.pop();
-  return linhas;
+  return blocos.sort((a, b) => a.linhaIni - b.linhaIni);
 }
 
-type Mapa = { data: number; descricao: number; valor: number; pessoa: number; pago: number };
-
-/** Encontra a linha de cabeçalho e a posição de cada coluna que nos interessa. */
-export function mapearColunas(linhas: Linhas): { cabecalho: number; mapa: Mapa } | null {
-  const limite = Math.min(linhas.length, 15);
-
-  for (let i = 0; i < limite; i++) {
-    const celulas = linhas[i].map(chave);
-    const acha = (aceites: readonly string[]) =>
-      celulas.findIndex((c) => c !== "" && aceites.some((a) => c === a || c.startsWith(a)));
-
-    const mapa: Mapa = {
-      data: acha(COLUNAS.data),
-      descricao: acha(COLUNAS.descricao),
-      valor: acha(COLUNAS.valor),
-      pessoa: acha(COLUNAS.pessoa),
-      pago: acha(COLUNAS.pago),
-    };
-
-    // Valor e pessoa são indispensáveis; sem eles não há painel possível.
-    if (mapa.valor >= 0 && mapa.pessoa >= 0) return { cabecalho: i, mapa };
-  }
-  return null;
-}
-
-/** Mapa alias → slug, construído uma vez. */
-const POR_ALIAS = new Map<string, string>(
-  PESSOAS.flatMap((p) => p.aliases.map((a) => [chave(a), p.slug] as const)),
-);
-
-/** Encontra a pessoa de uma célula, aceitando "Mãe", "mae - mercado", "p/ mãe"… */
-export function pessoaDaCelula(celula: string): string | null {
-  const c = chave(celula);
-  if (!c) return null;
-  if (POR_ALIAS.has(c)) return POR_ALIAS.get(c)!;
-
-  for (const [alias, slug] of POR_ALIAS) {
-    if (new RegExp(`(^|[^a-z])${alias}([^a-z]|$)`).test(c)) return slug;
-  }
-  return null;
-}
-
-const PAGO = new Set(VALORES_PAGO.map(chave));
-
-/** Converte as linhas cruas nos lançamentos de cada pessoa. */
-export async function extrairLancamentos(linhas: Linhas): Promise<{
+/**
+ * Converte as abas nos lançamentos de cada pessoa.
+ *
+ * Valores negativos são pagamentos já feitos pela pessoa (a planilha usa
+ * linhas como "que ela ja pagou  -200,00"), por isso entram no saldo tal como
+ * estão — o total de um bloco é a soma simples da coluna Valor.
+ */
+export async function extrairLancamentos(abas: Aba[]): Promise<{
   porPessoa: Map<string, Lancamento[]>;
   lidas: number;
   ignoradas: number;
@@ -149,59 +187,55 @@ export async function extrairLancamentos(linhas: Linhas): Promise<{
 }> {
   const avisos: string[] = [];
   const porPessoa = new Map<string, Lancamento[]>(PESSOAS.map((p) => [p.slug, []]));
-
-  const encontrado = mapearColunas(linhas);
-  if (!encontrado) {
-    throw new Error(
-      "Não encontrei os cabeçalhos na planilha. Preciso de uma coluna de valor e outra que diga de quem é o gasto — " +
-      "acrescenta o nome real das colunas em lib/config.ts (COLUNAS).",
-    );
-  }
-
-  const { cabecalho, mapa } = encontrado;
-  const corpo = linhas.slice(cabecalho + 1);
   let lidas = 0;
   let ignoradas = 0;
 
-  for (let i = 0; i < corpo.length; i++) {
-    const linha = corpo[i];
-    const numeroNaFolha = cabecalho + 2 + i;
-
-    if (!linha || linha.every((c) => String(c ?? "").trim() === "")) continue;
-
-    const slug = mapa.pessoa >= 0 ? pessoaDaCelula(linha[mapa.pessoa] ?? "") : null;
-    if (!slug) { ignoradas++; continue; }
-
-    const valor = lerValor(linha[mapa.valor]);
-    if (valor === null || valor === 0) {
-      ignoradas++;
-      avisos.push(`Linha ${numeroNaFolha}: valor ilegível ("${linha[mapa.valor] ?? ""}") — ignorada.`);
+  for (const aba of abas) {
+    const mapa = mapearColunas(aba);
+    if (!mapa) {
+      avisos.push(`Aba "${aba.nome}": não encontrei o cabeçalho (Compra / Valor / Nome) — ignorada.`);
       continue;
     }
 
-    const data = mapa.data >= 0 ? lerData(linha[mapa.data]) : null;
-    if (mapa.data >= 0 && !data) {
-      avisos.push(`Linha ${numeroNaFolha}: data ilegível ("${linha[mapa.data] ?? ""}") — lançamento entra sem data.`);
+    const blocos = encontrarBlocos(aba, mapa);
+    if (!blocos.length) avisos.push(`Aba "${aba.nome}": nenhum bloco de pessoa reconhecido.`);
+
+    for (const bloco of blocos) {
+      for (let l = bloco.linhaIni; l < bloco.linhaFim; l++) {
+        const descricao = texto(aba, l, mapa.descricao);
+        const bruto = texto(aba, l, mapa.valor);
+        if (!descricao && !bruto) continue;
+
+        const valor = lerValor(bruto);
+        if (valor === null || valor === 0) {
+          if (descricao) {
+            ignoradas++;
+            avisos.push(`${aba.nome} linha ${l + 1} ("${descricao.slice(0, 30)}"): valor ilegível ("${bruto}").`);
+          }
+          continue;
+        }
+
+        const data = mapa.parcelas >= 0 ? lerData(texto(aba, l, mapa.parcelas)) : null;
+        const situacao = mapa.situacao >= 0 ? texto(aba, l, mapa.situacao) : "";
+        const cartao = mapa.cartao >= 0 ? texto(aba, l, mapa.cartao) : "";
+
+        porPessoa.get(bloco.slug)!.push({
+          id: await idDaLinha(bloco.slug, data ?? aba.nome, descricao, valor, l),
+          data: data ?? "1970-01-01",
+          descricao: descricao || "Sem descrição",
+          valor,
+          // "pago"/"mes seguinte" na coluna Situação é o estado da FATURA do
+          // cartão, não o acerto com a pessoa. O que salda a dívida é uma
+          // linha de valor negativo.
+          pago: false,
+          mes: aba.nome,
+          nota: [cartao, situacao].filter(Boolean).join(" · "),
+        });
+        lidas++;
+      }
     }
-
-    const descricao =
-      (mapa.descricao >= 0 ? String(linha[mapa.descricao] ?? "").trim() : "") || "Sem descrição";
-
-    const pago = mapa.pago >= 0 ? PAGO.has(chave(linha[mapa.pago])) : false;
-    const dataFinal = data ?? "1970-01-01";
-
-    porPessoa.get(slug)!.push({
-      id: await idDaLinha(slug, dataFinal, descricao, valor, i),
-      data: dataFinal,
-      descricao,
-      valor,
-      pago,
-    });
-    lidas++;
   }
 
-  // Avisos a mais só fazem ruído no log do cron.
-  if (avisos.length > 20) avisos.splice(20, avisos.length, `…e mais ${avisos.length - 20} avisos.`);
-
+  if (avisos.length > 25) avisos.splice(25, avisos.length, `…e mais ${avisos.length - 25} avisos.`);
   return { porPessoa, lidas, ignoradas, avisos };
 }
