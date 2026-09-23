@@ -1,5 +1,5 @@
 import { JWT } from "google-auth-library";
-import { ABAS, COLUNAS, FIM_DO_BLOCO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
+import { ABAS, COLUNAS, PESSOAS, ROTULOS_IGNORADOS } from "./config";
 import { chave, idDaLinha, lerData, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
 
@@ -97,7 +97,7 @@ const texto = (aba: Aba, l: number, c: number) => aba.celulas[l]?.[c]?.texto?.tr
 export type Mapa = {
   cabecalho: number;
   categoria: number; parcelas: number; descricao: number;
-  valor: number; situacao: number; cartao: number; nome: number;
+  valor: number; situacao: number; cartao: number; nome: number; total: number;
 };
 
 export function mapearColunas(aba: Aba): Mapa | null {
@@ -113,6 +113,7 @@ export function mapearColunas(aba: Aba): Mapa | null {
 
     return {
       cabecalho: l, nome, valor, descricao,
+      total: acha(COLUNAS.total),
       categoria: acha(COLUNAS.categoria),
       parcelas: acha(COLUNAS.parcelas),
       situacao: acha(COLUNAS.situacao),
@@ -128,53 +129,44 @@ const POR_ROTULO = new Map<string, string>(
 const IGNORADOS = new Set(ROTULOS_IGNORADOS.map(chave));
 
 /** Um bloco de pessoa dentro de uma aba. */
-export type Bloco = { slug: string; rotulo: string; linhaIni: number; linhaFim: number };
+export type Bloco = {
+  slug: string; rotulo: string; linhaIni: number; linhaFim: number;
+  /** A soma que a planilha mostra para este bloco, para cruzarmos com a nossa. */
+  totalDeclarado: number | null;
+};
 
 /**
- * Encontra os blocos de pessoa.
+ * Encontra os blocos de pessoa: cada célula FUNDIDA na coluna "Nome".
  *
- * O bloco de alguém vai do seu rótulo na coluna "Nome" até ao rótulo seguinte,
- * seja ele de outra pessoa ou de uma categoria ignorada como "Mercado".
- *
- * A célula fundida sozinha não serve: na planilha há fusões mais curtas do que
- * o bloco realmente pintado (Mãe, Setembro: a fusão pára na linha 185 mas o
- * verde desce até à 205). E a cor sozinha também não: um bloco usa mais do que
- * uma tonalidade (Fernando, Setembro: 6D9EEB nas primeiras linhas e C9DAF8 nas
- * restantes). Ir de rótulo a rótulo dá exactamente a união das duas cores.
+ * Confirmado contra a própria planilha: ao lado de cada bloco há uma célula
+ * fundida na coluna "Total" com a soma que a folha mostra, e em 15 blocos de
+ * 15 essa soma cobre exactamente as linhas da fusão.
  */
 export function encontrarBlocos(aba: Aba, mapa: Mapa): Bloco[] {
-  // Todos os rótulos da coluna Nome, por ordem — inclusive os ignorados, que
-  // servem de fronteira.
-  const rotulos = aba.fusoes
-    .filter((f) => f.colIni === mapa.nome && f.linhaIni > mapa.cabecalho)
-    .map((f) => ({ linha: f.linhaIni, texto: texto(aba, f.linhaIni, mapa.nome) }))
-    .filter((r) => r.texto !== "")
-    .sort((a, b) => a.linha - b.linha);
-
   const blocos: Bloco[] = [];
 
-  for (let i = 0; i < rotulos.length; i++) {
-    const { linha, texto: rotulo } = rotulos[i];
+  for (const fusao of aba.fusoes) {
+    if (fusao.colIni !== mapa.nome || fusao.linhaIni <= mapa.cabecalho) continue;
+
+    const rotulo = texto(aba, fusao.linhaIni, mapa.nome);
     const k = chave(rotulo);
     const slug = POR_ROTULO.get(k);
     if (!slug || IGNORADOS.has(k)) continue;
 
-    // Até ao rótulo seguinte; no último bloco, até a folha ficar em branco —
-    // sem isto o último bloco engoliria o resto da aba.
-    let fim = i + 1 < rotulos.length ? rotulos[i + 1].linha : aba.celulas.length;
-    if (i + 1 === rotulos.length) {
-      let vazias = 0;
-      for (let l = linha; l < aba.celulas.length; l++) {
-        const temValor = texto(aba, l, mapa.valor) !== "" || texto(aba, l, mapa.descricao) !== "";
-        vazias = temValor ? 0 : vazias + 1;
-        if (vazias >= FIM_DO_BLOCO) { fim = l - vazias + 1; break; }
-      }
-    }
+    // A soma que a planilha mostra para este bloco, se lá estiver.
+    const declarado = mapa.total >= 0
+      ? lerValor(texto(aba, fusao.linhaIni, mapa.total))
+      : null;
 
-    blocos.push({ slug, rotulo, linhaIni: linha, linhaFim: fim });
+    blocos.push({
+      slug, rotulo,
+      linhaIni: fusao.linhaIni,
+      linhaFim: fusao.linhaFim,
+      totalDeclarado: declarado,
+    });
   }
 
-  return blocos;
+  return blocos.sort((a, b) => a.linhaIni - b.linhaIni);
 }
 
 /**
@@ -237,6 +229,24 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
           nota: [cartao, situacao].filter(Boolean).join(" · "),
         });
         lidas++;
+      }
+
+      // A fórmula da planilha soma só células numéricas: um valor escrito como
+      // texto ("R$ 61,18", "380,5*") desaparece do total dela em silêncio. Nós
+      // lemos os dois formatos, por isso avisamos quando divergem — é dinheiro
+      // a mais que a folha não está a contar.
+      if (bloco.totalDeclarado !== null) {
+        const nosso = porPessoa.get(bloco.slug)!
+          .filter((l) => l.mes === aba.nome)
+          .reduce((s, l) => s + l.valor, 0);
+        const diferenca = nosso - bloco.totalDeclarado;
+        if (Math.abs(diferenca) >= 0.01) {
+          avisos.push(
+            `${aba.nome}, bloco "${bloco.rotulo}": a planilha mostra ` +
+            `${bloco.totalDeclarado.toFixed(2)} mas as linhas somam ${nosso.toFixed(2)} ` +
+            `(${diferenca > 0 ? "+" : ""}${diferenca.toFixed(2)} — valores escritos como texto).`,
+          );
+        }
       }
     }
   }

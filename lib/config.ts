@@ -41,13 +41,10 @@ export const COLUNAS = {
   situacao: ["situacao", "situação"],
   cartao: ["cartao", "cartão"],
   nome: ["nome"],
+  total: ["total"],
 } as const;
 
-/**
- * Quantas linhas seguidas sem nada fecham o ÚLTIMO bloco de uma aba (os outros
- * fecham no rótulo seguinte). Sem isto, o último bloco engolia o resto da folha.
- */
-export const FIM_DO_BLOCO = Number(process.env.FIM_DO_BLOCO ?? 15);
+
 
 /** Moeda em que os valores são mostrados. */
 export const MOEDA = { locale: "pt-BR", currency: "BRL" } as const;

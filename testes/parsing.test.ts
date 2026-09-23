@@ -21,10 +21,10 @@ function aba(
 }
 
 /** Cabeçalho tal como está na planilha: A..K, com "Nome" na coluna K (índice 10). */
-const CABECALHO = ["", "", "", "Categoria", "Parcelas", "Compra", "Valor", "Situação", "Cartao", "", "Nome"];
-const vazio = ["", "", "", "", "", "", "", "", "", "", ""];
-const item = (parcela: string, compra: string, valor: string, situacao = "", cartao = "", nome = "") =>
-  ["", "", "", "pg", parcela, compra, valor, situacao, cartao, "", nome];
+const CABECALHO = ["", "", "", "Categoria", "Parcelas", "Compra", "Valor", "Situação", "Cartao", "", "Nome", "Total"];
+const vazio = ["", "", "", "", "", "", "", "", "", "", "", ""];
+const item = (parcela: string, compra: string, valor: string, situacao = "", cartao = "", nome = "", total = "") =>
+  ["", "", "", "pg", parcela, compra, valor, situacao, cartao, "", nome, total];
 
 test("lê valores em qualquer notação", () => {
   assert.equal(lerValor("R$ 1.234,56"), 1234.56);
@@ -58,33 +58,43 @@ test("encontra o cabeçalho da secção de pessoas", () => {
   assert.equal(mapa.situacao, 7);
 });
 
-test("o bloco vai do rótulo até ao rótulo seguinte, não até ao fim da fusão", () => {
-  // Reproduz o conflito de Setembro: a fusão da Mãe pára cedo, mas o bloco
-  // dela continua até começar o do Ulisses.
+test("cada bloco é a célula fundida na coluna Nome", () => {
   const linhas = [CABECALHO];
-  linhas.push(item("", "Coberta", "63,91", "", "Nubank", "Fernando"));   // 1
-  linhas.push(item("", "hormonios", "200,69"));                          // 2  outra cor, mas dele
-  linhas.push(item("", "Transtore", "833,60"));                          // 3
-  linhas.push(item("", "Geleia", "16,97", "", "", "Mercado"));           // 4  fronteira ignorada
-  linhas.push(item("", "Leite em pó", "25,89"));                         // 5
-  linhas.push(item("", "vaso", "40,97", "", "", "Mae"));                 // 6
-  linhas.push(item("", "roupas shein", "136,88"));                       // 7  fora da fusão curta
-  linhas.push(item("", "Dr peanut", "44,90", "", "", "Ulisses"));        // 8
+  linhas.push(item("", "Coberta", "63,91", "", "Nubank", "Fernando"));
+  linhas.push(item("", "hormonios", "200,69"));
+  linhas.push(item("", "Geleia", "16,97", "", "", "Mercado"));   // ignorado
+  linhas.push(item("", "vaso", "40,97", "", "", "Mae"));
+  linhas.push(item("", "Dr peanut", "44,90", "", "", "Ulisses"));
 
   const a = aba("Setembro", linhas, [
-    { linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 },   // fusão curta
+    { linhaIni: 1, linhaFim: 3, colIni: 10, colFim: 11 },
+    { linhaIni: 3, linhaFim: 4, colIni: 10, colFim: 11 },
     { linhaIni: 4, linhaFim: 5, colIni: 10, colFim: 11 },
-    { linhaIni: 6, linhaFim: 7, colIni: 10, colFim: 11 },   // fusão curta
-    { linhaIni: 8, linhaFim: 9, colIni: 10, colFim: 11 },
+    { linhaIni: 5, linhaFim: 6, colIni: 10, colFim: 11 },
   ]);
-  const mapa = mapearColunas(a)!;
-  const blocos = encontrarBlocos(a, mapa);
+  const blocos = encontrarBlocos(a, mapearColunas(a)!);
 
   assert.deepEqual(blocos.map((b) => [b.slug, b.linhaIni, b.linhaFim]), [
-    ["fernando", 1, 4],   // apanha hormonios e Transtore, apesar da fusão parar na 2
-    ["mae", 6, 8],        // apanha roupas shein
-    ["ulisses", 8, 9],
+    ["fernando", 1, 3], ["mae", 4, 5], ["ulisses", 5, 6],
   ]);
+});
+
+test("avisa quando o total da planilha não bate com as linhas", async () => {
+  // Novembro, bloco da Mãe: a folha mostra 20,52 porque só a primeira linha
+  // está guardada como número; as outras são texto e a fórmula ignora-as.
+  const linhas = [CABECALHO];
+  linhas.push(item("02/03", "Pote bolo", "20,51666667", "", "C6 Bank", "Mae", "20,51666667"));
+  linhas.push(item("02/05", "Mato parede", "R$ 61,18"));
+  linhas.push(item("02/02", "vela verde", "R$ 22,80"));
+
+  const a = aba("Novembro", linhas, [{ linhaIni: 1, linhaFim: 4, colIni: 10, colFim: 11 }]);
+  const { porPessoa, avisos } = await extrairLancamentos([a]);
+
+  const saldo = porPessoa.get("mae")!.reduce((s, l) => s + l.valor, 0);
+  assert.equal(Number(saldo.toFixed(2)), 104.50);     // o que as linhas somam mesmo
+  assert.equal(avisos.length, 1);
+  assert.match(avisos[0], /planilha mostra 20\.52 mas as linhas somam 104\.50/);
+  assert.match(avisos[0], /escritos como texto/);
 });
 
 test("a célula fundida sozinha não define o bloco", () => {
