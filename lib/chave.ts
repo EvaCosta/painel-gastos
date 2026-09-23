@@ -73,10 +73,34 @@ export function lerChavePrivada(bruta: string | undefined, nomeDaVariavel: strin
     throw new Error(
       `${nomeDaVariavel} tem o formato certo mas não descodifica ` +
       `(${erro instanceof Error ? erro.message : erro}). ` +
+      `${diagnostico(bruta, chave)} ` +
       "Costuma ser uma cópia incompleta: confirma que copiaste do -----BEGIN até ao -----END, " +
       "e que não faltam linhas no meio.",
     );
   }
 
   return chave;
+}
+
+/**
+ * Descreve o que chegou sem revelar a chave: só tamanhos e contagens, para se
+ * comparar com o que o JSON original tem e perceber o que se perdeu no caminho.
+ * Uma chave RSA de 2048 bits dá um corpo de 1600 a 1640 caracteres base64.
+ */
+function diagnostico(bruta: string, normalizada: string): string {
+  const corpo = normalizada
+    .replace(/-----[A-Z ]+-----/g, "")
+    .replace(/\s+/g, "");
+
+  const foraDoAlfabeto = corpo.replace(/[A-Za-z0-9+/=]/g, "");
+
+  return [
+    `Recebi ${bruta.length} caracteres`,
+    `corpo base64 de ${corpo.length}`,
+    `${corpo.length % 4 === 0 ? "múltiplo de 4" : `NÃO múltiplo de 4 (sobram ${corpo.length % 4})`}`,
+    foraDoAlfabeto.length
+      ? `${foraDoAlfabeto.length} caracteres que não são base64`
+      : "só caracteres base64",
+    `${normalizada.split("\n").length - 1} linhas`,
+  ].join(" · ") + ".";
 }
