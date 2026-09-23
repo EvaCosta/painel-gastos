@@ -105,10 +105,14 @@ vercel
 ```
 
 Mete as mesmas variáveis em *Settings → Environment Variables* e
-`NEXT_PUBLIC_BASE_URL` com o domínio final. O `vercel.json` já agenda o sync de
-hora a hora; a Vercel envia o `CRON_SECRET` sozinha no cabeçalho.
+`NEXT_PUBLIC_BASE_URL` com o domínio final. A Vercel envia o `CRON_SECRET`
+sozinha no cabeçalho.
 
-Forçar um sync à mão:
+O `vercel.json` agenda o sync **uma vez por dia**, às 9h UTC (6h em Brasília) —
+é o que o plano Hobby permite. Num plano pago dá para pôr de hora a hora
+(`"schedule": "0 * * * *"`).
+
+Forçar um sync à mão, entre agendamentos:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/sync
