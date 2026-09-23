@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lerData, lerValor } from "../lib/normalizar";
+import { lerValor } from "../lib/normalizar";
 import { encontrarBlocos, extrairLancamentos, mapearColunas, type Aba } from "../lib/planilha";
 
 /** Monta uma aba de teste a partir de linhas `[texto, cor?]`. */
@@ -39,12 +39,20 @@ test("lê valores em qualquer notação", () => {
   assert.equal(lerValor(""), null);
 });
 
-test("lê datas em qualquer formato", () => {
-  assert.equal(lerData("2026-09-19"), "2026-09-19");
-  assert.equal(lerData("19/09/2026"), "2026-09-19");
-  assert.equal(lerData("19 de setembro", 2026), "2026-09-19");
-  assert.equal(lerData("46284"), "2026-09-19");
-  assert.equal(lerData("31/02/2026"), null);
+test("o mês vem da aba, não da coluna Parcelas", async () => {
+  // "02/03" é parcela 2 de 3 — o Sheets mostra-a como 2 de Março, mas o mês
+  // do lançamento é a aba onde ele está.
+  const set = aba("Setembro", [CABECALHO, item("02/03", "Pote bolo", "20,52", "", "", "Mae")],
+    [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+  const nov = aba("Novembro", [CABECALHO, item("3 ml", "Geleia", "16,97", "", "", "Mae")],
+    [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+
+  const { porPessoa } = await extrairLancamentos([set, nov]);
+  const mae = porPessoa.get("mae")!;
+
+  assert.deepEqual(mae.map((l) => l.mes), ["Setembro", "Novembro"]);
+  assert.deepEqual(mae.map((l) => l.ordemMes), [0, 1]);
+  assert.deepEqual(mae.map((l) => l.parcela), ["02/03", "3 ml"]);
 });
 
 test("encontra o cabeçalho da secção de pessoas", () => {
@@ -132,7 +140,7 @@ test("o saldo do bloco da mãe bate com a planilha", async () => {
 
   assert.equal(lidas, 6);
   const saldo = porPessoa.get("mae")!.reduce((s, l) => s + l.valor, 0);
-  assert.equal(Number(saldo.toFixed(2)), 171.23);   // o total que a planilha mostra
+  assert.equal(Number(saldo.toFixed(2)), 171.23);
 });
 
 test("uma linha negativa abate o saldo — 'que ela ja pagou'", async () => {

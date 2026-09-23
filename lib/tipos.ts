@@ -1,25 +1,36 @@
-/** Um lançamento da planilha, já normalizado. */
+/** Um lançamento do bloco de uma pessoa. */
 export type Lancamento = {
   /** Hash estável da linha — é o id no Firestore, para o sync ser idempotente. */
   id: string;
-  /** ISO `YYYY-MM-DD`. */
-  data: string;
-  descricao: string;
-  /** Em unidades da moeda (ex.: 186.4), nunca em cêntimos. Negativo = pagamento já feito. */
-  valor: number;
-  pago: boolean;
-  /** Aba de origem, ex. "Setembro". */
+  /** Aba de onde veio, ex. "Setembro". É este o mês do lançamento. */
   mes: string;
+  /** Posição da aba na planilha, para ordenar os meses sem adivinhar. */
+  ordemMes: number;
+  descricao: string;
+  /** Em unidades da moeda. Negativo = pagamento que a pessoa já fez. */
+  valor: number;
+  /**
+   * A coluna "Parcelas" tal como está: "02/03", "3 ml", "shopee 2"…
+   * Não é uma data, por muito que o Sheets a mostre como tal.
+   */
+  parcela: string;
   /** Cartão e situação, como estão na planilha. */
   nota: string;
+};
+
+export type Mes = {
+  nome: string;
+  ordem: number;
+  lancamentos: Lancamento[];
+  total: number;
 };
 
 export type Painel = {
   slug: string;
   nome: string;
   saudacao: string;
-  lancamentos: Lancamento[];
-  totalAberto: number;
+  meses: Mes[];
+  total: number;
   totalPago: number;
   atualizadoEm: string | null;
 };

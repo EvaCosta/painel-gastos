@@ -1,7 +1,7 @@
 import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { PESSOAS } from "./config";
-import type { Lancamento, Painel } from "./tipos";
+import type { Lancamento, Mes, Painel } from "./tipos";
 
 /**
  * Só o Admin SDK toca no Firestore. O browser nunca fala com a base de dados
@@ -99,11 +99,21 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
   if (!doc.exists) return null;
 
   const dados = doc.data() ?? {};
-  const lancamentos = await firestore
+  const docs = await firestore
     .collection("pessoas").doc(slug)
     .collection("lancamentos")
-    .orderBy("data", "desc")
+    .orderBy("ordemMes", "desc")
     .get();
+
+  // Agrupar por mês, mantendo a ordem das abas da planilha.
+  const porMes = new Map<string, Mes>();
+  for (const d of docs.docs) {
+    const l = d.data() as Lancamento;
+    let mes = porMes.get(l.mes);
+    if (!mes) { mes = { nome: l.mes, ordem: l.ordemMes, lancamentos: [], total: 0 }; porMes.set(l.mes, mes); }
+    mes.lancamentos.push(l);
+    mes.total += l.valor;
+  }
 
   const atualizadoEm = dados.atualizadoEm?.toDate?.() as Date | undefined;
 
@@ -111,8 +121,8 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
     slug,
     nome: String(dados.nome ?? slug),
     saudacao: String(dados.saudacao ?? `Oi, ${dados.nome ?? slug}`),
-    lancamentos: lancamentos.docs.map((d) => d.data() as Lancamento),
-    totalAberto: Number(dados.totalAberto ?? 0),
+    meses: [...porMes.values()].sort((a, b) => b.ordem - a.ordem),
+    total: Number(dados.totalAberto ?? 0),
     totalPago: Number(dados.totalPago ?? 0),
     atualizadoEm: atualizadoEm ? atualizadoEm.toISOString() : null,
   };

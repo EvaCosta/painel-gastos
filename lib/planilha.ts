@@ -1,6 +1,6 @@
 import { JWT } from "google-auth-library";
 import { ABAS, COLUNAS, PESSOAS, ROTULOS_IGNORADOS } from "./config";
-import { chave, idDaLinha, lerData, lerValor } from "./normalizar";
+import { chave, idDaLinha, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
 
 /** Uma aba, já reduzida ao que nos interessa. */
@@ -187,7 +187,7 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
   let lidas = 0;
   let ignoradas = 0;
 
-  for (const aba of abas) {
+  for (const [indiceDaAba, aba] of abas.entries()) {
     const mapa = mapearColunas(aba);
     if (!mapa) {
       avisos.push(`Aba "${aba.nome}": não encontrei o cabeçalho (Compra / Valor / Nome) — ignorada.`);
@@ -212,20 +212,20 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
           continue;
         }
 
-        const data = mapa.parcelas >= 0 ? lerData(texto(aba, l, mapa.parcelas)) : null;
+        const parcela = mapa.parcelas >= 0 ? texto(aba, l, mapa.parcelas) : "";
         const situacao = mapa.situacao >= 0 ? texto(aba, l, mapa.situacao) : "";
         const cartao = mapa.cartao >= 0 ? texto(aba, l, mapa.cartao) : "";
 
         porPessoa.get(bloco.slug)!.push({
-          id: await idDaLinha(bloco.slug, data ?? aba.nome, descricao, valor, l),
-          data: data ?? "1970-01-01",
+          id: await idDaLinha(bloco.slug, aba.nome, descricao, valor, l),
+          mes: aba.nome,
+          ordemMes: indiceDaAba,
           descricao: descricao || "Sem descrição",
           valor,
+          parcela,
           // "pago"/"mes seguinte" na coluna Situação é o estado da FATURA do
           // cartão, não o acerto com a pessoa. O que salda a dívida é uma
           // linha de valor negativo.
-          pago: false,
-          mes: aba.nome,
           nota: [cartao, situacao].filter(Boolean).join(" · "),
         });
         lidas++;
