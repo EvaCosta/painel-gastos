@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "tokens": "tsx scripts/gerar-tokens.ts",
     "sync": "tsx scripts/sync-local.ts",
-    "test": "tsx --test testes/*.test.ts"
+    "test": "tsx --test testes/*.test.ts",
+    "testar": "tsx scripts/testar-ligacao.ts"
   },
   "dependencies": {
     "firebase-admin": "^14.4.0",
