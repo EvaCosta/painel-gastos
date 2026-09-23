@@ -6,6 +6,8 @@ export type Lancamento = {
   mes: string;
   /** Posição da aba na planilha, para ordenar os meses sem adivinhar. */
   ordemMes: number;
+  /** Linha de origem na aba, para os itens saírem pela ordem da planilha. */
+  linha: number;
   descricao: string;
   /** Em unidades da moeda. Negativo = pagamento que a pessoa já fez. */
   valor: number;

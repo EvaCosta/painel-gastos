@@ -7,8 +7,18 @@ import type { Lancamento, Mes, Painel } from "./tipos";
  * Só o Admin SDK toca no Firestore. O browser nunca fala com a base de dados
  * — ver firestore.rules, que nega tudo do lado do cliente.
  */
+let instancia: Firestore | null = null;
+
 export function db(): Firestore {
-  if (!getApps().length) {
+  if (instancia) return instancia;
+
+  // Em dev o Next recarrega este módulo, o que põe `instancia` a null outra
+  // vez — mas a app Firebase é global e sobrevive. Por isso o que decide se
+  // podemos chamar settings() é o estado da app, não o do módulo: settings()
+  // só pode ser chamado uma vez, e antes de qualquer outra operação.
+  const jaExistia = getApps().length > 0;
+
+  if (!jaExistia) {
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
@@ -20,9 +30,10 @@ export function db(): Firestore {
     }
     initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
   }
-  const firestore = getFirestore(getApp());
-  firestore.settings({ ignoreUndefinedProperties: true });
-  return firestore;
+
+  instancia = getFirestore(getApp());
+  if (!jaExistia) instancia.settings({ ignoreUndefinedProperties: true });
+  return instancia;
 }
 
 /** Substitui os lançamentos de uma pessoa pelos que vieram agora da planilha. */
@@ -99,16 +110,20 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
   if (!doc.exists) return null;
 
   const dados = doc.data() ?? {};
+  // Sem orderBy: ordenar por dois campos exigiria um índice composto, e são
+  // poucas dezenas de documentos por pessoa. Ordena-se aqui.
   const docs = await firestore
     .collection("pessoas").doc(slug)
     .collection("lancamentos")
-    .orderBy("ordemMes", "desc")
     .get();
 
   // Agrupar por mês, mantendo a ordem das abas da planilha.
   const porMes = new Map<string, Mes>();
-  for (const d of docs.docs) {
-    const l = d.data() as Lancamento;
+  const lancamentos = docs.docs
+    .map((d) => d.data() as Lancamento)
+    .sort((a, b) => b.ordemMes - a.ordemMes || a.linha - b.linha);
+
+  for (const l of lancamentos) {
     let mes = porMes.get(l.mes);
     if (!mes) { mes = { nome: l.mes, ordem: l.ordemMes, lancamentos: [], total: 0 }; porMes.set(l.mes, mes); }
     mes.lancamentos.push(l);

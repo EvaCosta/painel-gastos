@@ -111,9 +111,13 @@ export function mapearColunas(aba: Aba): Mapa | null {
     const descricao = acha(COLUNAS.descricao);
     if (nome < 0 || valor < 0 || descricao < 0) continue;
 
+    // A coluna do total do bloco costuma não ter cabeçalho escrito: é só a
+    // coluna logo a seguir ao "Nome", com uma célula fundida por bloco.
+    const totalComCabecalho = acha(COLUNAS.total);
+
     return {
       cabecalho: l, nome, valor, descricao,
-      total: acha(COLUNAS.total),
+      total: totalComCabecalho >= 0 ? totalComCabecalho : nome + 1,
       categoria: acha(COLUNAS.categoria),
       parcelas: acha(COLUNAS.parcelas),
       situacao: acha(COLUNAS.situacao),
@@ -122,6 +126,13 @@ export function mapearColunas(aba: Aba): Mapa | null {
   }
   return null;
 }
+
+/**
+ * Marcas de contabilidade interna que não se mostram a quem lê o painel.
+ * "pago" nestas colunas quer dizer que a FATURA do cartão está paga — pô-lo
+ * ao lado de "em aberto" só faz a pessoa perguntar porquê.
+ */
+const RUIDO = new Set(["ok", "pago", "paga", "pg", "-", "x", "sim", "nao", "não", ""]);
 
 const POR_ROTULO = new Map<string, string>(
   PESSOAS.flatMap((p) => p.rotulos.map((r) => [chave(r), p.slug] as const)),
@@ -220,13 +231,16 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
           id: await idDaLinha(bloco.slug, aba.nome, descricao, valor, l),
           mes: aba.nome,
           ordemMes: indiceDaAba,
+          linha: l,
           descricao: descricao || "Sem descrição",
           valor,
           parcela,
           // "pago"/"mes seguinte" na coluna Situação é o estado da FATURA do
           // cartão, não o acerto com a pessoa. O que salda a dívida é uma
           // linha de valor negativo.
-          nota: [cartao, situacao].filter(Boolean).join(" · "),
+          nota: [cartao, situacao]
+            .filter((t) => !RUIDO.has(chave(t)))
+            .join(" · "),
         });
         lidas++;
       }
@@ -240,7 +254,9 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
           .filter((l) => l.mes === aba.nome)
           .reduce((s, l) => s + l.valor, 0);
         const diferenca = nosso - bloco.totalDeclarado;
-        if (Math.abs(diferenca) >= 0.01) {
+        // Abaixo de cinco cêntimos é arredondamento da folha (ela mostra
+        // 3.385,38 para um valor que é 3.385,375), não um valor em falta.
+        if (Math.abs(diferenca) >= 0.05) {
           avisos.push(
             `${aba.nome}, bloco "${bloco.rotulo}": a planilha mostra ` +
             `${bloco.totalDeclarado.toFixed(2)} mas as linhas somam ${nosso.toFixed(2)} ` +
