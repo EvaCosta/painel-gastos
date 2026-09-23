@@ -38,15 +38,13 @@ export function db(): Firestore {
       );
     }
 
-    // Uma chave mal colada (com as aspas do JSON à volta, ou truncada) falha
-    // mais à frente com um erro de OpenSSL que não diz o que fazer.
-    if (!privateKey.includes("-----BEGIN PRIVATE KEY-----")) {
-      throw new Error(
-        "FIREBASE_PRIVATE_KEY não parece uma chave: falta o cabeçalho -----BEGIN PRIVATE KEY-----. " +
-        "O valor é só o conteúdo entre aspas do campo private_key do JSON, sem as aspas de fora.",
-      );
-    }
-    initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey: lerChavePrivada(privateKey, "FIREBASE_PRIVATE_KEY"),
+      }),
+    });
   }
 
   instancia = getFirestore(getApp());
