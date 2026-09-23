@@ -30,9 +30,17 @@ export async function lerPlanilha(): Promise<Aba[]> {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const chavePrivada = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
-  if (!id || !email || !chavePrivada) {
+  const emFalta = [
+    ["PLANILHA_ID", id],
+    ["GOOGLE_SERVICE_ACCOUNT_EMAIL", email],
+    ["GOOGLE_PRIVATE_KEY", chavePrivada],
+  ].filter(([, v]) => !v).map(([nome]) => nome);
+
+  if (emFalta.length || !id || !email || !chavePrivada) {
     throw new Error(
-      "Planilha não configurada: faltam PLANILHA_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL ou GOOGLE_PRIVATE_KEY.",
+      `Planilha não configurada: falta ${emFalta.join(", ")}. ` +
+      "Na Vercel, confirma que a variável existe E que tem a caixa Production marcada, " +
+      "e faz Redeploy.",
     );
   }
 

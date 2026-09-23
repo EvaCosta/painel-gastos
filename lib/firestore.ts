@@ -23,9 +23,26 @@ export function db(): Firestore {
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
-    if (!projectId || !clientEmail || !privateKey) {
+    const emFalta = [
+      ["FIREBASE_PROJECT_ID", projectId],
+      ["FIREBASE_CLIENT_EMAIL", clientEmail],
+      ["FIREBASE_PRIVATE_KEY", privateKey],
+    ].filter(([, v]) => !v).map(([nome]) => nome);
+
+    if (emFalta.length || !projectId || !clientEmail || !privateKey) {
       throw new Error(
-        "Firebase não configurado: faltam FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL ou FIREBASE_PRIVATE_KEY.",
+        `Firebase não configurado: falta ${emFalta.join(", ")}. ` +
+        "Na Vercel, confirma que a variável existe E que tem a caixa Production marcada, " +
+        "e faz Redeploy — variáveis novas só entram no deploy seguinte.",
+      );
+    }
+
+    // Uma chave mal colada (com as aspas do JSON à volta, ou truncada) falha
+    // mais à frente com um erro de OpenSSL que não diz o que fazer.
+    if (!privateKey.includes("-----BEGIN PRIVATE KEY-----")) {
+      throw new Error(
+        "FIREBASE_PRIVATE_KEY não parece uma chave: falta o cabeçalho -----BEGIN PRIVATE KEY-----. " +
+        "O valor é só o conteúdo entre aspas do campo private_key do JSON, sem as aspas de fora.",
       );
     }
     initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
