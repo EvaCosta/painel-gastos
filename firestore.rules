@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Nenhum cliente fala com o Firestore. Os painéis são renderizados no servidor
+// com o Admin SDK, que passa ao lado destas regras. Negar tudo aqui garante que
+// um link vazado nunca dá acesso aos dados de outra pessoa.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "painel-gastos",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "tokens": "tsx scripts/gerar-tokens.ts",
+    "sync": "tsx scripts/sync-local.ts",
+    "test": "tsx --test testes/*.test.ts"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.4.0",
+    "google-auth-library": "^10.9.1",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}
