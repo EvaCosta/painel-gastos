@@ -1,5 +1,6 @@
 import { JWT } from "google-auth-library";
 import { ABAS, COLUNAS, PESSOAS, ROTULOS_IGNORADOS } from "./config";
+import { lerChavePrivada } from "./chave";
 import { chave, idDaLinha, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
 
@@ -28,7 +29,7 @@ function hex({ red = 0, green = 0, blue = 0 }: Cor): string {
 export async function lerPlanilha(): Promise<Aba[]> {
   const id = process.env.PLANILHA_ID;
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const chavePrivada = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const chavePrivada = process.env.GOOGLE_PRIVATE_KEY;
 
   const emFalta = [
     ["PLANILHA_ID", id],
@@ -45,7 +46,8 @@ export async function lerPlanilha(): Promise<Aba[]> {
   }
 
   const jwt = new JWT({
-    email, key: chavePrivada,
+    email,
+    key: lerChavePrivada(chavePrivada, "GOOGLE_PRIVATE_KEY"),
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });
   const { token } = await jwt.getAccessToken();
