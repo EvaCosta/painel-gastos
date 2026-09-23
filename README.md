@@ -1,7 +1,8 @@
 # Painel de gastos
 
-Quatro painéis privados — um por pessoa — alimentados por uma folha do Google Sheets.
-Cada pessoa abre o seu link e vê **só o que ela deve**. Ninguém vê o total de outro.
+Cinco painéis privados — um por pessoa — alimentados pela folha
+**Organização Mensal** do Google Sheets. Cada pessoa abre o seu link e vê **só o
+que ela deve**, separado por mês. Ninguém vê o total de outro.
 
 ```
 Google Sheets  ──(cron de hora a hora)──▶  /api/sync  ──▶  Firestore
@@ -12,13 +13,12 @@ Google Sheets  ──(cron de hora a hora)──▶  /api/sync  ──▶  Fires
 ## Porque é que um não vê o do outro
 
 - Cada pessoa tem um **token aleatório de 32 caracteres**; o link é `/p/<token>`.
-- A página é renderizada **no servidor** e só carrega os lançamentos daquele `slug`.
-  O HTML que chega ao browser nunca contém dados de mais ninguém — não há filtro
-  no cliente a esconder nada.
+- A página é renderizada **no servidor** e só carrega os lançamentos daquele
+  `slug`. O HTML que chega ao browser nunca contém dados de mais ninguém — não
+  há filtro no cliente a esconder nada.
 - O browser **nunca fala com o Firestore**. Não há SDK de cliente, e
   `firestore.rules` nega todos os acessos diretos. Só o Admin SDK, no servidor, lê.
-- Nenhuma página é posta em cache (`force-dynamic`), para não haver hipótese de
-  servir o painel de alguém a outra pessoa.
+- Nenhuma página é posta em cache (`force-dynamic`).
 - A raiz `/` e qualquer token inválido não revelam nada, nem sequer quantas
   pessoas existem.
 
@@ -27,23 +27,39 @@ Se um link vazar, expõe **apenas** aquela pessoa, e roda-se com
 
 ## Como a planilha é lida
 
-O leitor procura o cabeçalho nas primeiras 15 linhas e aceita vários nomes por
-coluna (ver `COLUNAS` em `lib/config.ts`):
+A folha tem uma aba por mês (`Setembro`, `Outubro`, `Novembro`, …). Dentro de
+cada aba há uma secção que começa neste cabeçalho:
 
-| Campo | Cabeçalhos aceites | Obrigatório |
-|---|---|---|
-| Data | `Data`, `Dia`, `Quando`… | não (fica "Sem data") |
-| Descrição | `Descrição`, `Item`, `Gasto`… | não |
-| Valor | `Valor`, `Preço`, `Total`… | **sim** |
-| Pessoa | `Pessoa`, `Quem`, `Categoria`, `Tag`… | **sim** |
-| Pago | `Pago`, `Status`, `Situação`… | não (assume em aberto) |
+```
+Categoria | Parcelas | Compra | Valor | Situação | Cartao | … | Nome | Total
+```
 
-Aguenta `R$ 1.234,56`, `1,234.56`, `(50)` para negativos, e datas em
-`19/09/2026`, `2026-09-19`, `19 de setembro`, ou número de série do Sheets.
+**O bloco de cada pessoa é uma célula FUNDIDA na coluna `Nome`** que abrange
+todas as linhas dela — `K136:K160 = "Mae"`, por exemplo. Ao lado, na coluna
+`Total`, a folha guarda a sua própria soma do bloco.
 
-Uma linha só entra se a coluna de pessoa disser `mãe`, `Ulisses`, `Fernando` ou
-`Heloísa` (ver `aliases` em `lib/config.ts`). Tudo o resto é ignorado em silêncio —
-é o que permite ter a planilha cheia de outras coisas.
+Por isso o leitor usa `spreadsheets.get` com `includeGridData`: o endpoint
+`values` devolve só texto, e aqui a estrutura vive nas fusões.
+
+### Regras que vieram da planilha real
+
+| Regra | Porquê |
+|---|---|
+| O bloco é a fusão, não a cor | Verificado em 15 blocos de 15: o total da coluna `Total` cobre exactamente as linhas da fusão. Há blocos pintados para lá dela. |
+| `Mercado` e `VIAGEM JF` não são pessoas | `Mercado` é o cartão da mãe — usá-lo não quer dizer que ela esteja a dever. Ver `ROTULOS_IGNORADOS`. |
+| Saldo = soma simples da coluna `Valor` | Linhas negativas são pagamentos já feitos pela pessoa (`"que ela ja pagou  -200,00"`). |
+| `pago` na coluna `Situação` não salda nada | Refere-se ao estado da fatura do cartão, não ao acerto com a pessoa. |
+| O mês vem da **aba** | A coluna `Parcelas` não são datas: `02/03` é parcela 2 de 3, e também lá aparecem `3 ml`, `shopee 2`, `pg`. |
+
+### Valores escritos como texto
+
+A fórmula da folha soma **só células numéricas**. Um valor escrito como
+`R$ 61,18` ou `380,5*` fica guardado como texto e **desaparece do total dela**
+em silêncio — nas três abas actuais são R$ 798,57 que a folha não conta.
+
+O leitor lê os dois formatos e conta tudo. Quando o seu total difere do
+declarado na coluna `Total`, o sync emite um aviso a dizer quanto e porquê, em
+vez de escolher um em silêncio.
 
 ## Instalação
 
@@ -52,28 +68,35 @@ npm install
 cp .env.example .env.local     # e preenche
 ```
 
-**Google Sheets.** Em console.cloud.google.com: cria um projeto, ativa a
-*Google Sheets API*, cria uma conta de serviço e gera uma chave JSON. Copia
-`client_email` → `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `private_key` →
-`GOOGLE_PRIVATE_KEY` (entre aspas, com os `\n`). Depois **partilha a folha com
-esse email**, em modo leitura. `PLANILHA_ID` é o pedaço do URL entre `/d/` e `/edit`.
+**Firebase.** Cria o projeto, activa o Firestore (edição *Standard*, região
+`southamerica-east1`), e em *Configurações do projeto → Contas de serviço* gera
+uma chave privada. Do JSON saem `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` e
+`FIREBASE_PRIVATE_KEY`. Publica as regras:
+`npx firebase-tools deploy --only firestore:rules`.
 
-**Firebase.** Cria o projeto, ativa o Firestore, e em *Definições do projeto →
-Contas de serviço* gera uma chave privada. Preenche as três variáveis
-`FIREBASE_*`. Publica as regras: `firebase deploy --only firestore:rules`.
+**Google Sheets.** O projeto Firebase **é** um projeto Google Cloud: dá para usar
+a mesma conta de serviço. Em console.cloud.google.com, no mesmo projeto, activa
+a *Google Sheets API*; depois **partilha a folha** (leitura) com o
+`client_email`. `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `GOOGLE_PRIVATE_KEY` são os
+mesmos valores do Firebase.
+
+> A `private_key` traz `\n` literais. No `.env.local` mete-a entre aspas tal como
+> vem do JSON; na Vercel cola-a com as quebras de linha reais. O código aguenta
+> os dois casos.
 
 **Segredos.** `openssl rand -hex 32` para `CRON_SECRET` e outro para `ADMIN_TOKEN`.
 
 ## Primeiro arranque
 
 ```bash
-npm run tokens   # cria o token de cada pessoa e imprime os 4 links
-npm run sync     # lê a planilha e enche o Firestore (mostra o que ignorou)
+npm run tokens          # cria o token de cada pessoa e imprime os 5 links
+npm run sync -- --seco  # lê a planilha e mostra o que saiu, SEM gravar
+npm run sync            # grava no Firestore
 npm run dev
 ```
 
-O `npm run sync` imprime as colunas que encontrou e avisa de cada linha que não
-conseguiu ler — é por aí que se afina o `lib/config.ts`.
+O `--seco` imprime os blocos que encontrou, as linhas de cada um e os avisos.
+É por aí que se confere antes de pôr o que quer que seja à frente de alguém.
 
 ## Deploy
 
@@ -85,18 +108,32 @@ Mete as mesmas variáveis em *Settings → Environment Variables* e
 `NEXT_PUBLIC_BASE_URL` com o domínio final. O `vercel.json` já agenda o sync de
 hora a hora; a Vercel envia o `CRON_SECRET` sozinha no cabeçalho.
 
-Para forçar um sync à mão:
+Forçar um sync à mão:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/sync
 ```
+
+`/admin/<ADMIN_TOKEN>` dá a visão geral de toda a gente, e os links para enviar.
 
 ## Onde mexer
 
 | Quero… | Ficheiro |
 |---|---|
 | Acrescentar ou tirar uma pessoa | `lib/config.ts` → `PESSOAS` |
-| A planilha usa outro nome de coluna | `lib/config.ts` → `COLUNAS` |
+| Ler mais meses | `.env` → `PLANILHA_ABAS` |
+| Um rótulo novo que não é pessoa | `lib/config.ts` → `ROTULOS_IGNORADOS` |
 | Mudar de R$ para € | `lib/config.ts` → `MOEDA` |
 | Sync mais ou menos frequente | `vercel.json` → `crons.schedule` |
 | Mudar o visual | `app/globals.css` e `app/Painel.tsx` |
+
+## Testes
+
+```bash
+npm test
+```
+
+11 testes sobre o leitor, incluindo os casos reais que deram problema: o bloco
+da Mãe de Novembro (a folha mostra R$ 20,52, as linhas somam R$ 171,23), a linha
+negativa da Vó, o cartão da mãe a ficar de fora, e cada pessoa a receber só o
+seu bloco.
