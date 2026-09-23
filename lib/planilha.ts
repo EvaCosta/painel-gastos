@@ -1,5 +1,5 @@
 import { JWT } from "google-auth-library";
-import { ABAS, COLUNAS, PESSOAS, ROTULOS_IGNORADOS } from "./config";
+import { ABAS, COLUNAS, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
 import { lerChavePrivada } from "./chave";
 import { chave, idDaLinha, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
@@ -168,11 +168,16 @@ export function mapearColunas(aba: Aba): Mapa | null {
 }
 
 /**
- * Marcas de contabilidade interna que não se mostram a quem lê o painel.
- * "pago" nestas colunas quer dizer que a FATURA do cartão está paga — pô-lo
- * ao lado de "em aberto" só faz a pessoa perguntar porquê.
+ * Reconhece uma marca de pago no meio do texto da célula. É uma procura por
+ * palavra inteira, senão "pagamento" ou "pagar" também acertariam.
  */
-const RUIDO = new Set(["ok", "pago", "paga", "pg", "-", "x", "sim", "nao", "não", ""]);
+function estaPago(celula: string): boolean {
+  const texto = chave(celula);
+  if (!texto) return false;
+  return MARCAS_DE_PAGO.some((marca) =>
+    new RegExp(`(^|[^a-z])${marca}([^a-z]|$)`).test(texto),
+  );
+}
 
 const POR_ROTULO = new Map<string, string>(
   PESSOAS.flatMap((p) => p.rotulos.map((r) => [chave(r), p.slug] as const)),
@@ -275,12 +280,9 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
           descricao: descricao || "Sem descrição",
           valor,
           parcela,
-          // "pago"/"mes seguinte" na coluna Situação é o estado da FATURA do
-          // cartão, não o acerto com a pessoa. O que salda a dívida é uma
-          // linha de valor negativo.
-          nota: [cartao, situacao]
-            .filter((t) => !RUIDO.has(chave(t)))
-            .join(" · "),
+          // Marcado como pago na planilha = a pessoa acertou. Em que cartão a
+          // compra foi feita não entra: é assunto de quem pagou, não de quem deve.
+          pago: estaPago(situacao) || estaPago(cartao),
         });
         lidas++;
       }

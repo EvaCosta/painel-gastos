@@ -69,9 +69,13 @@ export async function gravarPessoa(
   const idsNovos = new Set(lancamentos.map((l) => l.id));
   const aRemover = [...idsAntigos].filter((id) => !idsNovos.has(id));
 
-  // Saldo = soma de tudo. Linhas negativas são pagamentos que a pessoa já fez.
-  const totalAberto = lancamentos.reduce((s, l) => s + l.valor, 0);
-  const totalPago = -lancamentos.filter((l) => l.valor < 0).reduce((s, l) => s + l.valor, 0);
+  // Uma linha sai do saldo de duas maneiras: marcada como paga na planilha, ou
+  // lançada com valor negativo (um acerto escrito como abatimento).
+  const emAberto = lancamentos.filter((l) => !l.pago);
+  const totalAberto = emAberto.reduce((s, l) => s + l.valor, 0);
+  const totalPago =
+    lancamentos.filter((l) => l.pago).reduce((s, l) => s + l.valor, 0) -
+    emAberto.filter((l) => l.valor < 0).reduce((s, l) => s + l.valor, 0);
 
   // O Firestore aceita 500 operações por lote.
   let lote = firestore.batch();
@@ -95,7 +99,7 @@ export async function gravarPessoa(
       saudacao: pessoa.saudacao,
       totalAberto,
       totalPago,
-      emAberto: lancamentos.filter((l) => l.valor > 0).length,
+      emAberto: emAberto.filter((l) => l.valor > 0).length,
       atualizadoEm: FieldValue.serverTimestamp(),
     },
     { merge: true },
@@ -143,7 +147,7 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
     let mes = porMes.get(l.mes);
     if (!mes) { mes = { nome: l.mes, ordem: l.ordemMes, lancamentos: [], total: 0 }; porMes.set(l.mes, mes); }
     mes.lancamentos.push(l);
-    mes.total += l.valor;
+    if (!l.pago) mes.total += l.valor;
   }
 
   const atualizadoEm = dados.atualizadoEm?.toDate?.() as Date | undefined;

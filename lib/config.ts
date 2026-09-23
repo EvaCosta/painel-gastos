@@ -23,6 +23,17 @@ export type Slug = (typeof PESSOAS)[number]["slug"];
  * "Mercado" é o cartão da mãe — usá-lo não quer dizer que ela esteja a dever,
  * por isso fica de fora. "VIAGEM JF" é uma despesa partilhada, tratada à parte.
  */
+/**
+ * Marcas que dizem que a pessoa já acertou. O lançamento continua a aparecer
+ * no painel, riscado, mas deixa de contar para o total.
+ *
+ * Basta a palavra aparecer no meio do texto: a planilha tem coisas como
+ * "Paguei picado 19,90+15,10", que é um acerto com uma nota ao lado.
+ */
+export const MARCAS_DE_PAGO = [
+  "pago", "paga", "pagos", "pagas", "paguei", "quitado", "acertado", "recebido",
+];
+
 export const ROTULOS_IGNORADOS = ["mercado", "viagem jf", "nome", "total", "soma geral"];
 
 /**

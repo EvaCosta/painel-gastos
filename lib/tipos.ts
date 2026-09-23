@@ -16,8 +16,8 @@ export type Lancamento = {
    * Não é uma data, por muito que o Sheets a mostre como tal.
    */
   parcela: string;
-  /** Cartão e situação, como estão na planilha. */
-  nota: string;
+  /** A pessoa já acertou esta linha (marcada como paga na planilha). */
+  pago: boolean;
 };
 
 export type Mes = {

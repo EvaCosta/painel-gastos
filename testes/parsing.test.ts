@@ -200,3 +200,61 @@ test("os ids são estáveis entre leituras", async () => {
   const dois = await extrairLancamentos([aba("Novembro", linhas, fus)]);
   assert.equal(um.porPessoa.get("mae")![0].id, dois.porPessoa.get("mae")![0].id);
 });
+
+test("uma linha marcada como paga sai do saldo mas continua à vista", async () => {
+  const linhas = [CABECALHO];
+  linhas.push(item("", "hormonios", "200,69", "", "", "Fernando"));
+  linhas.push(item("", "psicologo", "100,00", "Pago", "Beto"));
+  linhas.push(item("", "Netflix", "35,00", "Paguei picado 19,90+15,10", "Paguei 15/09 C6 Bank"));
+
+  const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 4, colIni: 10, colFim: 11 }]);
+  const { porPessoa } = await extrairLancamentos([a]);
+  const ls = porPessoa.get("fernando")!;
+
+  assert.equal(ls.length, 3, "as três continuam a aparecer no painel");
+  assert.deepEqual(ls.map((l) => l.pago), [false, true, true]);
+
+  const aberto = ls.filter((l) => !l.pago).reduce((s, l) => s + l.valor, 0);
+  assert.equal(Number(aberto.toFixed(2)), 200.69);
+});
+
+test("reconhece a marca de pago em qualquer das colunas e no meio do texto", async () => {
+  const casos: Array<[string, string, boolean]> = [
+    ["Pago", "", true],
+    ["pago", "", true],
+    ["", "PAGO", true],
+    ["Paguei picado 19,90+15,10", "", true],
+    ["quitado em 12/10", "", true],
+    ["", "Paguei 15/09 C6 Bank", true],
+    ["Nubank", "", false],
+    ["mes que vem", "", false],
+    ["", "C6 Bank", false],
+    ["a pagar", "", false],          // "pagar" não é "pago"
+    ["pagamento pendente", "", false],
+    ["", "", false],
+  ];
+
+  for (const [situacao, cartao, esperado] of casos) {
+    const linhas = [CABECALHO, item("", "item", "10,00", situacao, cartao, "Mae")];
+    const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+    const { porPessoa } = await extrairLancamentos([a]);
+    assert.equal(
+      porPessoa.get("mae")![0].pago, esperado,
+      `Situação=${JSON.stringify(situacao)} Cartao=${JSON.stringify(cartao)}`,
+    );
+  }
+});
+
+test("o cartão não chega ao painel", async () => {
+  const linhas = [CABECALHO, item("02/03", "Pote bolo", "20,52", "Nubank", "C6 Bank", "Mae")];
+  const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+  const { porPessoa } = await extrairLancamentos([a]);
+
+  const lancamento = porPessoa.get("mae")![0];
+  assert.equal(lancamento.parcela, "02/03");
+  assert.equal(
+    JSON.stringify(lancamento).includes("C6 Bank"), false,
+    "em que cartão foi pago é assunto de quem pagou",
+  );
+  assert.equal(JSON.stringify(lancamento).includes("Nubank"), false);
+});

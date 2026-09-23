@@ -30,18 +30,21 @@ async function principal() {
   console.log("");
   for (const pessoa of PESSOAS) {
     const lancamentos = porPessoa.get(pessoa.slug) ?? [];
-    const saldo = lancamentos.reduce((s, l) => s + l.valor, 0);
+    const abertos = lancamentos.filter((l) => !l.pago);
+    const saldo = abertos.reduce((s, l) => s + l.valor, 0);
+    const pagos = lancamentos.length - abertos.length;
 
     // Por mês, na ordem das abas.
     const porMes = new Map<string, number>();
-    for (const l of lancamentos) porMes.set(l.mes, (porMes.get(l.mes) ?? 0) + l.valor);
+    for (const l of abertos) porMes.set(l.mes, (porMes.get(l.mes) ?? 0) + l.valor);
     const meses = [...porMes.entries()]
       .map(([m, v]) => `${m} ${v.toFixed(2)}`)
       .join("  ·  ");
 
     const linha =
       `${pessoa.nome.padEnd(10)} ${String(lancamentos.length).padStart(3)} lanç.` +
-      `   saldo ${saldo.toFixed(2).padStart(9)}   ${meses}`;
+      `   saldo ${saldo.toFixed(2).padStart(9)}` +
+      `${pagos ? `  (${pagos} pagos)` : ""}   ${meses}`;
 
     if (!gravar) { console.log(linha, " (seco)"); continue; }
     const { escritos, removidos } = await gravarPessoa(pessoa.slug, lancamentos);

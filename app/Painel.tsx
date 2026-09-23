@@ -1,10 +1,10 @@
 import { fmtDinheiro, fmtMomento } from "@/lib/formato";
 import type { Lancamento, Painel as DadosPainel } from "@/lib/tipos";
 
-function Pastilha({ abatimento }: { abatimento: boolean }) {
+function Pastilha({ pago }: { pago: boolean }) {
   return (
-    <span className={`pill ${abatimento ? "done" : "open"}`}>
-      {abatimento ? (
+    <span className={`pill ${pago ? "done" : "open"}`}>
+      {pago ? (
         <svg viewBox="0 0 12 12" fill="none" aria-hidden="true">
           <path d="M2 6.4 4.8 9 10 3.4" stroke="currentColor" strokeWidth="1.8"
             strokeLinecap="round" strokeLinejoin="round" />
@@ -15,21 +15,22 @@ function Pastilha({ abatimento }: { abatimento: boolean }) {
           <path d="M6 3.5v2.8l1.8 1.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       )}
-      <span>{abatimento ? "Você pagou" : "Em aberto"}</span>
+      <span>{pago ? "Pago" : "Em aberto"}</span>
     </span>
   );
 }
 
 function Linha({ lancamento }: { lancamento: Lancamento }) {
-  const abatimento = lancamento.valor < 0;
-  const meta = [lancamento.parcela, lancamento.nota].filter(Boolean).join(" · ");
+  // Uma linha de valor negativo é um acerto já lançado; uma marcada como paga
+  // na planilha é a mesma coisa dita de outra maneira. Nenhuma conta para o total.
+  const saldado = lancamento.pago || lancamento.valor < 0;
 
   return (
-    <li className={`item${abatimento ? " paid" : ""}`}>
+    <li className={`item${saldado ? " paid" : ""}`}>
       <span className="desc">{lancamento.descricao}</span>
       <span className="val">{fmtDinheiro(lancamento.valor)}</span>
-      {meta && <span className="meta">{meta}</span>}
-      <span className="pillwrap"><Pastilha abatimento={abatimento} /></span>
+      {lancamento.parcela && <span className="meta">{lancamento.parcela}</span>}
+      <span className="pillwrap"><Pastilha pago={saldado} /></span>
     </li>
   );
 }
@@ -37,7 +38,8 @@ function Linha({ lancamento }: { lancamento: Lancamento }) {
 export default function Painel({ dados, comoAcertar }: { dados: DadosPainel; comoAcertar?: string }) {
   // Mês mais recente primeiro — a ordem vem da posição da aba na planilha.
   const meses = [...dados.meses].sort((a, b) => b.ordem - a.ordem);
-  const totalItens = meses.reduce((s, m) => s + m.lancamentos.filter((l) => l.valor > 0).length, 0);
+  const totalItens = meses.reduce(
+    (s, m) => s + m.lancamentos.filter((l) => !l.pago && l.valor > 0).length, 0);
 
   return (
     <main className="wrap">
