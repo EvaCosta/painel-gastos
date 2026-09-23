@@ -145,9 +145,17 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
 
   for (const l of lancamentos) {
     let mes = porMes.get(l.mes);
-    if (!mes) { mes = { nome: l.mes, ordem: l.ordemMes, lancamentos: [], total: 0 }; porMes.set(l.mes, mes); }
-    mes.lancamentos.push(l);
-    if (!l.pago) mes.total += l.valor;
+    if (!mes) {
+      mes = { nome: l.mes, ordem: l.ordemMes, abertos: [], pagos: [], total: 0, totalPago: 0 };
+      porMes.set(l.mes, mes);
+    }
+    if (l.pago) {
+      mes.pagos.push(l);
+      mes.totalPago += l.valor;
+    } else {
+      mes.abertos.push(l);
+      mes.total += l.valor;
+    }
   }
 
   const atualizadoEm = dados.atualizadoEm?.toDate?.() as Date | undefined;

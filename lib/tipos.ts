@@ -23,8 +23,14 @@ export type Lancamento = {
 export type Mes = {
   nome: string;
   ordem: number;
-  lancamentos: Lancamento[];
+  /** Ainda por acertar. */
+  abertos: Lancamento[];
+  /** Já acertados, mostrados à parte para a pessoa poder conferir. */
+  pagos: Lancamento[];
+  /** Soma dos abertos — é isto que a pessoa deve. */
   total: number;
+  /** Soma dos já acertados. */
+  totalPago: number;
 };
 
 export type Painel = {

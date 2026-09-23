@@ -1,5 +1,5 @@
 import { JWT } from "google-auth-library";
-import { ABAS, COLUNAS, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
+import { ABAS, COLUNAS, FRASES_DE_PAGO, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
 import { lerChavePrivada } from "./chave";
 import { chave, idDaLinha, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
@@ -174,6 +174,9 @@ export function mapearColunas(aba: Aba): Mapa | null {
 function estaPago(celula: string): boolean {
   const texto = chave(celula);
   if (!texto) return false;
+
+  if (FRASES_DE_PAGO.some((frase) => texto.includes(frase))) return true;
+
   return MARCAS_DE_PAGO.some((marca) =>
     new RegExp(`(^|[^a-z])${marca}([^a-z]|$)`).test(texto),
   );

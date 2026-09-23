@@ -49,6 +49,7 @@ Por isso o leitor usa `spreadsheets.get` com `includeGridData`: o endpoint
 | `Mercado` e `VIAGEM JF` não são pessoas | `Mercado` é o cartão da mãe — usá-lo não quer dizer que ela esteja a dever. Ver `ROTULOS_IGNORADOS`. |
 | Saldo = soma simples da coluna `Valor` | Linhas negativas são pagamentos já feitos pela pessoa (`"que ela ja pagou  -200,00"`). |
 | `pago` na coluna `Situação` salda a linha | O dono da planilha só a marca quando a pessoa acerta mesmo. A linha continua à vista, riscada, mas sai do total. Ver `MARCAS_DE_PAGO`. |
+| "dinheiro está comigo" também salda | A fatura do cartão ainda não foi paga, mas quem devia já entregou o dinheiro. Ver `FRASES_DE_PAGO`. |
 | O cartão não vai para o painel | Em que cartão a compra foi feita é assunto de quem pagou, não de quem deve. |
 | O mês vem da **aba** | A coluna `Parcelas` não são datas: `02/03` é parcela 2 de 3, e também lá aparecem `3 ml`, `shopee 2`, `pg`. |
 | Lê a aba da próxima fatura a vencer | As abas são faturas, não meses de calendário. Até ao dia 15 conta a deste mês; depois, a do mês seguinte — a 23 de Setembro o que interessa é Outubro. |

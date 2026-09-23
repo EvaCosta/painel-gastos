@@ -258,3 +258,22 @@ test("o cartão não chega ao painel", async () => {
   );
   assert.equal(JSON.stringify(lancamento).includes("Nubank"), false);
 });
+
+test("'dinheiro está comigo' sai do devendo, mesmo sem a fatura paga", async () => {
+  const linhas = [CABECALHO];
+  linhas.push(item("", "tinta henna surya", "155,48", "", "", "Mae"));
+  linhas.push(item("", "mercado", "211,59", "dinheiro esta comigo"));
+  linhas.push(item("", "Mercado", "22,50", "Dinheiro está comigo"));
+
+  const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 4, colIni: 10, colFim: 11 }]);
+  const { porPessoa } = await extrairLancamentos([a]);
+  const ls = porPessoa.get("mae")!;
+
+  assert.deepEqual(ls.map((l) => l.pago), [false, true, true],
+    "o acento e a maiúscula não podem fazer diferença");
+
+  const aberto = ls.filter((l) => !l.pago).reduce((s, l) => s + l.valor, 0);
+  const acertado = ls.filter((l) => l.pago).reduce((s, l) => s + l.valor, 0);
+  assert.equal(Number(aberto.toFixed(2)), 155.48);
+  assert.equal(Number(acertado.toFixed(2)), 234.09);
+});

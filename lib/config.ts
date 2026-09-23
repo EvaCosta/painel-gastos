@@ -34,6 +34,14 @@ export const MARCAS_DE_PAGO = [
   "pago", "paga", "pagos", "pagas", "paguei", "quitado", "acertado", "recebido",
 ];
 
+/**
+ * Frases que também saldam a linha, procuradas no meio do texto.
+ *
+ * "dinheiro está comigo" é dinheiro que a pessoa já entregou: a fatura do
+ * cartão ainda não foi paga, mas quem devia já não deve.
+ */
+export const FRASES_DE_PAGO = ["dinheiro esta comigo", "dinheiro comigo"];
+
 export const ROTULOS_IGNORADOS = ["mercado", "viagem jf", "nome", "total", "soma geral"];
 
 /**

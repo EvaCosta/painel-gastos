@@ -38,8 +38,8 @@ function Linha({ lancamento }: { lancamento: Lancamento }) {
 export default function Painel({ dados, comoAcertar }: { dados: DadosPainel; comoAcertar?: string }) {
   // Mês mais recente primeiro — a ordem vem da posição da aba na planilha.
   const meses = [...dados.meses].sort((a, b) => b.ordem - a.ordem);
-  const totalItens = meses.reduce(
-    (s, m) => s + m.lancamentos.filter((l) => !l.pago && l.valor > 0).length, 0);
+  const totalItens = meses.reduce((s, m) => s + m.abertos.filter((l) => l.valor > 0).length, 0);
+  const temPagos = meses.some((m) => m.pagos.length > 0);
 
   return (
     <main className="wrap">
@@ -66,20 +66,42 @@ export default function Painel({ dados, comoAcertar }: { dados: DadosPainel; com
               <dd>{fmtDinheiro(m.total)}</dd>
             </div>
           ))}
+          {temPagos && (
+            <div>
+              <dt>Já acertado</dt>
+              <dd className="ok">{fmtDinheiro(dados.totalPago)}</dd>
+            </div>
+          )}
         </dl>
       </section>
 
       {meses.length > 0 ? (
         meses.map((mes) => (
-          <section className="ledger" key={mes.nome} aria-label={`Lançamentos de ${mes.nome}`}>
-            <h2 className="month">
-              {mes.nome}
-              <span className="month-total">{fmtDinheiro(mes.total)}</span>
-            </h2>
-            <ul className="items">
-              {mes.lancamentos.map((l) => <Linha key={l.id} lancamento={l} />)}
-            </ul>
-          </section>
+          <div key={mes.nome}>
+            {mes.abertos.length > 0 && (
+              <section className="ledger" aria-label={`Em aberto — ${mes.nome}`}>
+                <h2 className="month">
+                  <span>{mes.nome} · a pagar</span>
+                  <span className="month-total">{fmtDinheiro(mes.total)}</span>
+                </h2>
+                <ul className="items">
+                  {mes.abertos.map((l) => <Linha key={l.id} lancamento={l} />)}
+                </ul>
+              </section>
+            )}
+
+            {mes.pagos.length > 0 && (
+              <section className="ledger" aria-label={`Já acertado — ${mes.nome}`}>
+                <h2 className="month settled">
+                  <span>{mes.nome} · já acertado</span>
+                  <span className="month-total">{fmtDinheiro(mes.totalPago)}</span>
+                </h2>
+                <ul className="items">
+                  {mes.pagos.map((l) => <Linha key={l.id} lancamento={l} />)}
+                </ul>
+              </section>
+            )}
+          </div>
         ))
       ) : (
         <p className="note">Ainda não há lançamentos registados.</p>
