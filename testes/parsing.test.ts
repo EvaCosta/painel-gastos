@@ -58,7 +58,36 @@ test("encontra o cabeçalho da secção de pessoas", () => {
   assert.equal(mapa.situacao, 7);
 });
 
-test("o bloco de uma pessoa é a célula fundida na coluna Nome", () => {
+test("o bloco vai do rótulo até ao rótulo seguinte, não até ao fim da fusão", () => {
+  // Reproduz o conflito de Setembro: a fusão da Mãe pára cedo, mas o bloco
+  // dela continua até começar o do Ulisses.
+  const linhas = [CABECALHO];
+  linhas.push(item("", "Coberta", "63,91", "", "Nubank", "Fernando"));   // 1
+  linhas.push(item("", "hormonios", "200,69"));                          // 2  outra cor, mas dele
+  linhas.push(item("", "Transtore", "833,60"));                          // 3
+  linhas.push(item("", "Geleia", "16,97", "", "", "Mercado"));           // 4  fronteira ignorada
+  linhas.push(item("", "Leite em pó", "25,89"));                         // 5
+  linhas.push(item("", "vaso", "40,97", "", "", "Mae"));                 // 6
+  linhas.push(item("", "roupas shein", "136,88"));                       // 7  fora da fusão curta
+  linhas.push(item("", "Dr peanut", "44,90", "", "", "Ulisses"));        // 8
+
+  const a = aba("Setembro", linhas, [
+    { linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 },   // fusão curta
+    { linhaIni: 4, linhaFim: 5, colIni: 10, colFim: 11 },
+    { linhaIni: 6, linhaFim: 7, colIni: 10, colFim: 11 },   // fusão curta
+    { linhaIni: 8, linhaFim: 9, colIni: 10, colFim: 11 },
+  ]);
+  const mapa = mapearColunas(a)!;
+  const blocos = encontrarBlocos(a, mapa);
+
+  assert.deepEqual(blocos.map((b) => [b.slug, b.linhaIni, b.linhaFim]), [
+    ["fernando", 1, 4],   // apanha hormonios e Transtore, apesar da fusão parar na 2
+    ["mae", 6, 8],        // apanha roupas shein
+    ["ulisses", 8, 9],
+  ]);
+});
+
+test("a célula fundida sozinha não define o bloco", () => {
   // Reproduz K136:K160 = "Mae" na aba Novembro.
   const linhas = [CABECALHO];
   linhas.push(item("02/03", "Pote bolo", "R$ 20,52", "", "C6 Bank", "Mae"));
@@ -77,7 +106,7 @@ test("o bloco de uma pessoa é a célula fundida na coluna Nome", () => {
   assert.equal(blocos.length, 1);
   assert.equal(blocos[0].slug, "mae");
   assert.equal(blocos[0].linhaIni, 1);
-  assert.equal(blocos[0].linhaFim, 7);
+  assert.equal(blocos[0].linhaFim, 7);   // último bloco: fecha quando a folha esvazia
 });
 
 test("o saldo do bloco da mãe bate com a planilha", async () => {

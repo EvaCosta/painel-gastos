@@ -3,14 +3,14 @@
  * É por aqui que se confere o que a planilha deu antes de pôr no ar:
  *   npm run sync
  */
-import { ABAS, LIMITE_DO_BLOCO, PESSOAS } from "../lib/config";
+import { ABAS, PESSOAS } from "../lib/config";
 import { gravarPessoa } from "../lib/firestore";
 import { encontrarBlocos, extrairLancamentos, lerPlanilha, mapearColunas } from "../lib/planilha";
 
 async function principal() {
   const gravar = !process.argv.includes("--seco");
 
-  console.log(`Abas: ${ABAS.join(", ")}  ·  limite do bloco: ${LIMITE_DO_BLOCO}\n`);
+  console.log(`Abas: ${ABAS.join(", ")}\n`);
   const abas = await lerPlanilha();
 
   for (const aba of abas) {

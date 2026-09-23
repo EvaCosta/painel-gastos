@@ -44,15 +44,10 @@ export const COLUNAS = {
 } as const;
 
 /**
- * Até onde vai o bloco de uma pessoa.
- *  "fundida" — só as linhas da célula fundida na coluna Nome (conservador).
- *  "cor"     — estende enquanto as linhas mantiverem a cor de fundo do bloco,
- *              mesmo para lá da célula fundida.
- * A planilha tem blocos onde a pintura vai mais longe do que a fusão; qual das
- * duas é a verdade é decisão do dono.
+ * Quantas linhas seguidas sem nada fecham o ÚLTIMO bloco de uma aba (os outros
+ * fecham no rótulo seguinte). Sem isto, o último bloco engolia o resto da folha.
  */
-export const LIMITE_DO_BLOCO: "fundida" | "cor" =
-  (process.env.LIMITE_DO_BLOCO as "fundida" | "cor") ?? "fundida";
+export const FIM_DO_BLOCO = Number(process.env.FIM_DO_BLOCO ?? 15);
 
 /** Moeda em que os valores são mostrados. */
 export const MOEDA = { locale: "pt-BR", currency: "BRL" } as const;

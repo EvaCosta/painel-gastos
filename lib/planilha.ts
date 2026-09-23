@@ -1,5 +1,5 @@
 import { JWT } from "google-auth-library";
-import { ABAS, COLUNAS, LIMITE_DO_BLOCO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
+import { ABAS, COLUNAS, FIM_DO_BLOCO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
 import { chave, idDaLinha, lerData, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
 
@@ -92,7 +92,6 @@ export async function lerPlanilha(): Promise<Aba[]> {
 }
 
 const texto = (aba: Aba, l: number, c: number) => aba.celulas[l]?.[c]?.texto?.trim() ?? "";
-const corDe = (aba: Aba, l: number, c: number) => aba.celulas[l]?.[c]?.cor ?? "";
 
 /** Onde estão as colunas da secção de pessoas, e em que linha está o cabeçalho. */
 export type Mapa = {
@@ -132,44 +131,50 @@ const IGNORADOS = new Set(ROTULOS_IGNORADOS.map(chave));
 export type Bloco = { slug: string; rotulo: string; linhaIni: number; linhaFim: number };
 
 /**
- * Encontra os blocos de pessoa: cada célula fundida na coluna "Nome" cujo
- * texto seja o nome de alguém com painel.
+ * Encontra os blocos de pessoa.
  *
- * Com LIMITE_DO_BLOCO="cor", o bloco estende-se para lá da fusão enquanto as
- * linhas seguintes mantiverem a mesma cor de fundo na coluna do valor —
- * há blocos na planilha pintados mais abaixo do que a célula fundida.
+ * O bloco de alguém vai do seu rótulo na coluna "Nome" até ao rótulo seguinte,
+ * seja ele de outra pessoa ou de uma categoria ignorada como "Mercado".
+ *
+ * A célula fundida sozinha não serve: na planilha há fusões mais curtas do que
+ * o bloco realmente pintado (Mãe, Setembro: a fusão pára na linha 185 mas o
+ * verde desce até à 205). E a cor sozinha também não: um bloco usa mais do que
+ * uma tonalidade (Fernando, Setembro: 6D9EEB nas primeiras linhas e C9DAF8 nas
+ * restantes). Ir de rótulo a rótulo dá exactamente a união das duas cores.
  */
 export function encontrarBlocos(aba: Aba, mapa: Mapa): Bloco[] {
+  // Todos os rótulos da coluna Nome, por ordem — inclusive os ignorados, que
+  // servem de fronteira.
+  const rotulos = aba.fusoes
+    .filter((f) => f.colIni === mapa.nome && f.linhaIni > mapa.cabecalho)
+    .map((f) => ({ linha: f.linhaIni, texto: texto(aba, f.linhaIni, mapa.nome) }))
+    .filter((r) => r.texto !== "")
+    .sort((a, b) => a.linha - b.linha);
+
   const blocos: Bloco[] = [];
 
-  for (const fusao of aba.fusoes) {
-    if (fusao.colIni !== mapa.nome) continue;
-    if (fusao.linhaIni <= mapa.cabecalho) continue;
-
-    const rotulo = texto(aba, fusao.linhaIni, mapa.nome);
+  for (let i = 0; i < rotulos.length; i++) {
+    const { linha, texto: rotulo } = rotulos[i];
     const k = chave(rotulo);
-    if (!k || IGNORADOS.has(k)) continue;
-
     const slug = POR_ROTULO.get(k);
-    if (!slug) continue;
+    if (!slug || IGNORADOS.has(k)) continue;
 
-    let linhaFim = fusao.linhaFim;
-
-    if (LIMITE_DO_BLOCO === "cor") {
-      const cor = corDe(aba, fusao.linhaIni, mapa.valor);
-      if (cor) {
-        while (
-          linhaFim < aba.celulas.length &&
-          corDe(aba, linhaFim, mapa.valor) === cor &&
-          !aba.fusoes.some((f) => f.colIni === mapa.nome && f.linhaIni === linhaFim)
-        ) linhaFim++;
+    // Até ao rótulo seguinte; no último bloco, até a folha ficar em branco —
+    // sem isto o último bloco engoliria o resto da aba.
+    let fim = i + 1 < rotulos.length ? rotulos[i + 1].linha : aba.celulas.length;
+    if (i + 1 === rotulos.length) {
+      let vazias = 0;
+      for (let l = linha; l < aba.celulas.length; l++) {
+        const temValor = texto(aba, l, mapa.valor) !== "" || texto(aba, l, mapa.descricao) !== "";
+        vazias = temValor ? 0 : vazias + 1;
+        if (vazias >= FIM_DO_BLOCO) { fim = l - vazias + 1; break; }
       }
     }
 
-    blocos.push({ slug, rotulo, linhaIni: fusao.linhaIni, linhaFim });
+    blocos.push({ slug, rotulo, linhaIni: linha, linhaFim: fim });
   }
 
-  return blocos.sort((a, b) => a.linhaIni - b.linhaIni);
+  return blocos;
 }
 
 /**
