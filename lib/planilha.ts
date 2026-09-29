@@ -28,13 +28,18 @@ function hex({ red = 0, green = 0, blue = 0 }: Cor): string {
  */
 export async function lerPlanilha(): Promise<Aba[]> {
   const id = process.env.PLANILHA_ID;
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const chavePrivada = process.env.GOOGLE_PRIVATE_KEY;
+
+  // A conta de serviço do Firebase é a mesma que lê a planilha: o projeto
+  // Firebase É um projeto Google Cloud. Manter a chave em duas variáveis só
+  // dá hipótese de uma delas ficar mal colada, por isso as GOOGLE_* são
+  // opcionais e, faltando, usam-se as do Firebase.
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL;
+  const chavePrivada = process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY;
 
   const emFalta = [
     ["PLANILHA_ID", id],
-    ["GOOGLE_SERVICE_ACCOUNT_EMAIL", email],
-    ["GOOGLE_PRIVATE_KEY", chavePrivada],
+    ["GOOGLE_SERVICE_ACCOUNT_EMAIL ou FIREBASE_CLIENT_EMAIL", email],
+    ["GOOGLE_PRIVATE_KEY ou FIREBASE_PRIVATE_KEY", chavePrivada],
   ].filter(([, v]) => !v).map(([nome]) => nome);
 
   if (emFalta.length || !id || !email || !chavePrivada) {
@@ -47,7 +52,10 @@ export async function lerPlanilha(): Promise<Aba[]> {
 
   const jwt = new JWT({
     email,
-    key: lerChavePrivada(chavePrivada, "GOOGLE_PRIVATE_KEY"),
+    key: lerChavePrivada(
+      chavePrivada,
+      process.env.GOOGLE_PRIVATE_KEY ? "GOOGLE_PRIVATE_KEY" : "FIREBASE_PRIVATE_KEY",
+    ),
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });
   const { token } = await jwt.getAccessToken();

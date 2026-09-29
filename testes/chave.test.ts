@@ -47,3 +47,21 @@ test("explica o que fazer quando a chave está truncada", () => {
   assert.throws(() => lerChavePrivada(truncada, "FIREBASE_PRIVATE_KEY"),
     /não descodifica.*cópia incompleta/s);
 });
+
+test("o diagnóstico diz quais são os caracteres estranhos", () => {
+  // Uma chave com barras invertidas deixadas para trás.
+  const partida = pem.replace(/\n/g, "\\\\\n");
+  assert.throws(
+    () => lerChavePrivada(partida, "GOOGLE_PRIVATE_KEY"),
+    (erro: Error) => {
+      assert.match(erro.message, /fora do alfabeto base64/);
+      assert.match(erro.message, /U\+005C/, "devia nomear a barra invertida");
+      return true;
+    },
+  );
+});
+
+test("uma chave boa nunca chega ao diagnóstico", () => {
+  assert.doesNotThrow(() => lerChavePrivada(pem, "FIREBASE_PRIVATE_KEY"));
+  assert.doesNotThrow(() => lerChavePrivada(pem.replace(/\n/g, "\\n"), "FIREBASE_PRIVATE_KEY"));
+});

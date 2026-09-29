@@ -94,12 +94,19 @@ function diagnostico(bruta: string, normalizada: string): string {
 
   const foraDoAlfabeto = corpo.replace(/[A-Za-z0-9+/=]/g, "");
 
+  // Quais são, não só quantos: um "1682 de 1682" não diz nada, enquanto ver
+  // que são barras invertidas ou aspas aponta logo para o que correu mal.
+  const quais = [...new Set(foraDoAlfabeto)]
+    .slice(0, 6)
+    .map((c) => `${JSON.stringify(c)} (U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")})`)
+    .join(", ");
+
   return [
     `Recebi ${bruta.length} caracteres`,
     `corpo base64 de ${corpo.length}`,
     `${corpo.length % 4 === 0 ? "múltiplo de 4" : `NÃO múltiplo de 4 (sobram ${corpo.length % 4})`}`,
     foraDoAlfabeto.length
-      ? `${foraDoAlfabeto.length} caracteres que não são base64`
+      ? `${foraDoAlfabeto.length} caracteres fora do alfabeto base64: ${quais}`
       : "só caracteres base64",
     `${normalizada.split("\n").length - 1} linhas`,
   ].join(" · ") + ".";

@@ -78,11 +78,14 @@ uma chave privada. Do JSON saem `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` e
 `FIREBASE_PRIVATE_KEY`. Publica as regras:
 `npx firebase-tools deploy --only firestore:rules`.
 
-**Google Sheets.** O projeto Firebase **é** um projeto Google Cloud: dá para usar
-a mesma conta de serviço. Em console.cloud.google.com, no mesmo projeto, activa
-a *Google Sheets API*; depois **partilha a folha** (leitura) com o
-`client_email`. `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `GOOGLE_PRIVATE_KEY` são os
-mesmos valores do Firebase.
+**Google Sheets.** O projeto Firebase **é** um projeto Google Cloud, e a mesma
+conta de serviço serve para os dois. Em console.cloud.google.com, no mesmo
+projeto, activa a *Google Sheets API*; depois **partilha a folha** (leitura)
+com o `client_email`.
+
+Não é preciso mais nenhuma variável: faltando `GOOGLE_SERVICE_ACCOUNT_EMAIL` e
+`GOOGLE_PRIVATE_KEY`, usam-se as do Firebase. Preenche-as só se quiseres ler a
+planilha com outra conta.
 
 > A `private_key` traz `\n` literais. No `.env.local` mete-a entre aspas tal como
 > vem do JSON; na Vercel cola-a com as quebras de linha reais. O código aguenta
