@@ -113,3 +113,17 @@ footer strong { color:var(--ink-2); font-weight:600; }
 .table th { font-size:11.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); font-weight:600; }
 .table td.num { text-align:right; font-weight:600; }
 .scroll { overflow-x:auto; }
+
+.atualizar { display:flex; flex-direction:column; gap:10px; align-items:flex-start; margin-top:4px; }
+.botao {
+  font: inherit; font-weight:600; font-size:15px;
+  color:var(--surface); background:var(--ink);
+  border:1px solid var(--ink); border-radius:9px;
+  padding:9px 18px; cursor:pointer;
+}
+.botao:hover:not(:disabled) { opacity:.88; }
+.botao:disabled { opacity:.55; cursor:progress; }
+.botao:focus-visible { outline:2px solid var(--accent, var(--paid)); outline-offset:2px; }
+.resultado { margin:0; font-size:14px; line-height:1.45; }
+.resultado.ok { color:var(--paid); }
+.resultado.erro { color:var(--open); }

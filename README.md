@@ -116,7 +116,8 @@ O `vercel.json` agenda o sync **uma vez por dia**, às 9h UTC (6h em Brasília) 
 é o que o plano Hobby permite. Num plano pago dá para pôr de hora a hora
 (`"schedule": "0 * * * *"`).
 
-Forçar um sync à mão, entre agendamentos:
+Para reler a planilha na hora há um **botão** em `/admin/<ADMIN_TOKEN>`. Pela
+linha de comandos:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/sync

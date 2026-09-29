@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { PESSOAS } from "@/lib/config";
-import { gravarPessoa } from "@/lib/firestore";
-import { extrairLancamentos, lerPlanilha } from "@/lib/planilha";
-import type { ResultadoSync } from "@/lib/tipos";
+import { sincronizar } from "@/lib/sincronizar";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -35,16 +32,7 @@ export async function GET(pedido: Request) {
   }
 
   try {
-    const abas = await lerPlanilha();
-    const { porPessoa, lidas, ignoradas, avisos } = await extrairLancamentos(abas);
-
-    const resultado: ResultadoSync = { lidas, ignoradas, porPessoa: {}, avisos };
-
-    for (const pessoa of PESSOAS) {
-      const lancamentos = porPessoa.get(pessoa.slug) ?? [];
-      resultado.porPessoa[pessoa.slug] = await gravarPessoa(pessoa.slug, lancamentos);
-    }
-
+    const resultado = await sincronizar();
     return NextResponse.json({ ok: true, em: new Date().toISOString(), ...resultado });
   } catch (erro) {
     const mensagem = erro instanceof Error ? erro.message : String(erro);

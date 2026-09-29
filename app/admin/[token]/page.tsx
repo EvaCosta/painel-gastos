@@ -1,6 +1,9 @@
+import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import { carregarResumo } from "@/lib/firestore";
 import { fmtDinheiro, fmtMomento } from "@/lib/formato";
+import { sincronizar } from "@/lib/sincronizar";
+import Atualizar from "./Atualizar";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,6 +20,36 @@ export default async function Admin({ params }: { params: Promise<{ token: strin
   const { token } = await params;
   const esperado = process.env.ADMIN_TOKEN;
   if (!esperado || !igual(token, esperado)) notFound();
+
+  // Corre no servidor. O browser só recebe o resultado em texto.
+  async function relerAgora() {
+    "use server";
+
+    const { token: pedido } = await params;
+    const segredo = process.env.ADMIN_TOKEN;
+    if (!segredo || !igual(pedido, segredo)) {
+      return { ok: false, mensagem: "Não autorizado." };
+    }
+
+    try {
+      const r = await sincronizar();
+      revalidatePath(`/admin/${pedido}`);
+
+      const aviso = r.avisos.length
+        ? ` ${r.avisos.length} ${r.avisos.length === 1 ? "aviso" : "avisos"}.`
+        : "";
+      return {
+        ok: true,
+        mensagem: `Pronto: ${r.lidas} lançamentos lidos da planilha.${aviso} ` +
+          "Recarrega a página para ver os números novos.",
+      };
+    } catch (erro) {
+      return {
+        ok: false,
+        mensagem: erro instanceof Error ? erro.message : "Falhou a leitura da planilha.",
+      };
+    }
+  }
 
   const pessoas = await carregarResumo();
   const total = pessoas.reduce((s, p) => s + p.totalAberto, 0);
@@ -55,6 +88,15 @@ export default async function Admin({ params }: { params: Promise<{ token: strin
           </tbody>
         </table>
       </div>
+
+      <section className="card">
+        <h2>Atualizar</h2>
+        <p>
+          A planilha é relida todos os dias às 6h da manhã. Carrega aqui para
+          não esperares — depois de mexeres nela, por exemplo.
+        </p>
+        <Atualizar acao={relerAgora} />
+      </section>
 
       <section className="card">
         <h2>Links para enviar</h2>
