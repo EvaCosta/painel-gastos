@@ -18,6 +18,8 @@ export type Lancamento = {
   parcela: string;
   /** A pessoa já acertou esta linha (marcada como paga na planilha). */
   pago: boolean;
+  /** Quando acertou, como está escrito na planilha ("15/09"). Vazio se não disser. */
+  pagoEm: string;
 };
 
 export type Mes = {

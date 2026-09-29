@@ -31,7 +31,8 @@ export type Slug = (typeof PESSOAS)[number]["slug"];
  * "Paguei picado 19,90+15,10", que é um acerto com uma nota ao lado.
  */
 export const MARCAS_DE_PAGO = [
-  "pago", "paga", "pagos", "pagas", "paguei", "quitado", "acertado", "recebido",
+  "pago", "paga", "pagos", "pagas", "paguei", "pg", "pgto",
+  "quitado", "quitei", "acertado", "acertou", "recebido", "recebi",
 ];
 
 /**

@@ -114,3 +114,33 @@ export async function idDaLinha(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
+/**
+ * Encontra uma data no meio de um texto livre e devolve-a como está escrita.
+ *
+ * As marcas de pagamento na planilha vêm acompanhadas da data do acerto —
+ * "Pago 15/09", "Paguei 15/09 C6 Bank", "quitado em 3 de outubro". É essa data
+ * que interessa mostrar a quem já acertou.
+ *
+ * Devolve o pedaço tal como está, sem inventar o ano: pôr um ano que não está
+ * escrito dava uma data errada quando a fatura atravessa a virada do ano.
+ */
+export function dataNoTexto(texto: string): string {
+  const limpo = String(texto ?? "");
+
+  // 15/09, 15/09/2026, 15-09, 15.09.26
+  const numerica = limpo.match(/(?:^|[^\d/.\-])(\d{1,2}[/.\-]\d{1,2}(?:[/.\-]\d{2,4})?)(?![\d/.\-])/);
+  if (numerica) {
+    const [dia, mes] = numerica[1].split(/[/.\-]/).map(Number);
+    // Sem isto, "19,90+15,10" ou um valor qualquer passava por data.
+    if (dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12) return numerica[1];
+  }
+
+  // 15 de setembro, 3 de out
+  const porExtenso = limpo.match(
+    /\b(\d{1,2}\s+de\s+(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*)/i,
+  );
+  if (porExtenso) return porExtenso[1];
+
+  return "";
+}

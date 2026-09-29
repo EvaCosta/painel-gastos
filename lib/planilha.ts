@@ -1,7 +1,7 @@
 import { JWT } from "google-auth-library";
 import { ABAS, COLUNAS, FRASES_DE_PAGO, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
 import { lerChavePrivada } from "./chave";
-import { chave, idDaLinha, lerValor } from "./normalizar";
+import { chave, dataNoTexto, idDaLinha, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
 
 /** Uma aba, já reduzida ao que nos interessa. */
@@ -171,6 +171,18 @@ export function mapearColunas(aba: Aba): Mapa | null {
  * Reconhece uma marca de pago no meio do texto da célula. É uma procura por
  * palavra inteira, senão "pagamento" ou "pagar" também acertariam.
  */
+/**
+ * Lê a marca de pagamento de uma linha: se está paga e, quando a planilha o
+ * diz, em que dia. A data vem colada à marca — "Pago 15/09", "Paguei 15/09
+ * C6 Bank" — por isso procura-se na mesma célula que trouxe a marca.
+ */
+export function lerPagamento(...celulas: string[]): { pago: boolean; data: string } {
+  for (const celula of celulas) {
+    if (estaPago(celula)) return { pago: true, data: dataNoTexto(celula) };
+  }
+  return { pago: false, data: "" };
+}
+
 function estaPago(celula: string): boolean {
   const texto = chave(celula);
   if (!texto) return false;
@@ -274,6 +286,7 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
         const parcela = mapa.parcelas >= 0 ? texto(aba, l, mapa.parcelas) : "";
         const situacao = mapa.situacao >= 0 ? texto(aba, l, mapa.situacao) : "";
         const cartao = mapa.cartao >= 0 ? texto(aba, l, mapa.cartao) : "";
+        const pagoEm = lerPagamento(situacao, cartao);
 
         porPessoa.get(bloco.slug)!.push({
           id: await idDaLinha(bloco.slug, aba.nome, descricao, valor, l),
@@ -285,7 +298,8 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
           parcela,
           // Marcado como pago na planilha = a pessoa acertou. Em que cartão a
           // compra foi feita não entra: é assunto de quem pagou, não de quem deve.
-          pago: estaPago(situacao) || estaPago(cartao),
+          pago: pagoEm.pago,
+          pagoEm: pagoEm.data,
         });
         lidas++;
       }

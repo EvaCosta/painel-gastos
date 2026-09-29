@@ -25,11 +25,16 @@ function Linha({ lancamento }: { lancamento: Lancamento }) {
   // na planilha é a mesma coisa dita de outra maneira. Nenhuma conta para o total.
   const saldado = lancamento.pago || lancamento.valor < 0;
 
+  const meta = [
+    lancamento.parcela,
+    lancamento.pagoEm && `pago em ${lancamento.pagoEm}`,
+  ].filter(Boolean).join(" · ");
+
   return (
     <li className={`item${saldado ? " paid" : ""}`}>
       <span className="desc">{lancamento.descricao}</span>
       <span className="val">{fmtDinheiro(lancamento.valor)}</span>
-      {lancamento.parcela && <span className="meta">{lancamento.parcela}</span>}
+      {meta && <span className="meta">{meta}</span>}
       <span className="pillwrap"><Pastilha pago={saldado} /></span>
     </li>
   );

@@ -277,3 +277,46 @@ test("'dinheiro está comigo' sai do devendo, mesmo sem a fatura paga", async ()
   assert.equal(Number(aberto.toFixed(2)), 155.48);
   assert.equal(Number(acertado.toFixed(2)), 234.09);
 });
+
+test("apanha a data do acerto colada à marca de pago", async () => {
+  const casos: Array<[string, boolean, string]> = [
+    ["Pago 15/09",                   true,  "15/09"],
+    ["pago em 3/10/2026",            true,  "3/10/2026"],
+    ["Paguei 15/09 C6 Bank",         true,  "15/09"],
+    ["quitado em 3 de outubro",      true,  "3 de outubro"],
+    ["Pago",                         true,  ""],      // sem data é na mesma pago
+    ["Paguei picado 19,90+15,10",    true,  ""],      // valores não são datas
+    ["Nubank",                       false, ""],
+    ["a pagar",                      false, ""],
+    ["pagamento pendente",           false, ""],
+  ];
+
+  for (const [situacao, pago, data] of casos) {
+    const linhas = [CABECALHO, item("02/03", "item", "10,00", situacao, "", "Mae")];
+    const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+    const l = (await extrairLancamentos([a])).porPessoa.get("mae")![0];
+    assert.equal(l.pago, pago, `pago? ${JSON.stringify(situacao)}`);
+    assert.equal(l.pagoEm, data, `data de ${JSON.stringify(situacao)}`);
+  }
+});
+
+test("a parcela não é confundida com a data do acerto", async () => {
+  // "02/03" na coluna Parcelas é parcela 2 de 3, e não pode virar uma data de
+  // pagamento — a procura só olha para as colunas que trazem a marca.
+  const linhas = [CABECALHO, item("02/03", "Pote bolo", "20,52", "", "", "Mae")];
+  const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+  const l = (await extrairLancamentos([a])).porPessoa.get("mae")![0];
+
+  assert.equal(l.pago, false);
+  assert.equal(l.pagoEm, "");
+  assert.equal(l.parcela, "02/03");
+});
+
+test("uma data impossível não conta como data", async () => {
+  const linhas = [CABECALHO, item("", "item", "10,00", "Pago 45/99", "", "Mae")];
+  const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+  const l = (await extrairLancamentos([a])).porPessoa.get("mae")![0];
+
+  assert.equal(l.pago, true, "a marca continua a valer");
+  assert.equal(l.pagoEm, "", "mas 45/99 não é data nenhuma");
+});
