@@ -73,9 +73,19 @@ export async function lerPlanilha(): Promise<Aba[]> {
   );
   if (!indice.ok) {
     const corpo = await indice.text().catch(() => "");
+
+    // Um 404 quer dizer duas coisas diferentes, e o Google não distingue: ou a
+    // planilha não está partilhada com esta conta, ou o ID não é de nenhuma
+    // planilha. Mostrar o ID e o seu tamanho resolve a segunda hipótese sem
+    // ter de se ir ver a variável à mão — um ID do Sheets tem 44 caracteres.
+    const pista = indice.status === 404
+      ? ` PLANILHA_ID em uso: "${id}" (${id.length} caracteres; ` +
+        `o ID de uma planilha tem 44). Se estiver certo, então é a partilha ` +
+        `com ${email} que falta.`
+      : ` Confirma que a planilha está partilhada com ${email}.`;
+
     throw new Error(
-      `Sheets API respondeu ${indice.status} ao listar as abas. Confirma que a planilha ` +
-      `está partilhada com ${email}. ${corpo.slice(0, 300)}`,
+      `Sheets API respondeu ${indice.status} ao listar as abas.${pista} ${corpo.slice(0, 200)}`,
     );
   }
   const titulos = new Set(
