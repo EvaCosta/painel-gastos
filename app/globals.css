@@ -127,3 +127,12 @@ footer strong { color:var(--ink-2); font-weight:600; }
 .resultado { margin:0; font-size:14px; line-height:1.45; }
 .resultado.ok { color:var(--paid); }
 .resultado.erro { color:var(--open); }
+
+.config { margin:6px 0 0; display:flex; flex-direction:column; gap:10px; }
+.config > div { display:flex; flex-direction:column; gap:3px; }
+.config dt { font-size:11.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); font-weight:600; }
+.config dd { margin:0; display:flex; align-items:flex-start; gap:6px; font-size:13.5px; }
+.config code { overflow-wrap:anywhere; }
+.sinal { font-weight:700; flex:none; line-height:1.5; }
+.sinal.ok { color:var(--paid); }
+.sinal.mau { color:var(--open); }

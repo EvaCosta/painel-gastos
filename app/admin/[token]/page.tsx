@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import { carregarResumo } from "@/lib/firestore";
 import { fmtDinheiro, fmtMomento } from "@/lib/formato";
+import { diagnosticoDaConfiguracao } from "@/lib/diagnostico";
 import { sincronizar } from "@/lib/sincronizar";
 import Atualizar from "./Atualizar";
 
@@ -88,6 +89,22 @@ export default async function Admin({ params }: { params: Promise<{ token: strin
           </tbody>
         </table>
       </div>
+
+      <section className="card">
+        <h2>Configuração</h2>
+        <p>O que a app está a usar agora. Serve para não ires às definições da Vercel.</p>
+        <dl className="config">
+          {diagnosticoDaConfiguracao().map((l) => (
+            <div key={l.rotulo}>
+              <dt>{l.rotulo}</dt>
+              <dd>
+                {l.ok === null ? null : <span className={l.ok ? "sinal ok" : "sinal mau"}>{l.ok ? "✓" : "✗"}</span>}
+                <code>{l.valor}</code>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section className="card">
         <h2>Atualizar</h2>
