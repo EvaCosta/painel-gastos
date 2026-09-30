@@ -320,3 +320,21 @@ test("uma data impossível não conta como data", async () => {
   assert.equal(l.pago, true, "a marca continua a valer");
   assert.equal(l.pagoEm, "", "mas 45/99 não é data nenhuma");
 });
+
+test("o nome no painel é escolha da configuração, não da planilha", async () => {
+  const { PESSOAS } = await import("../lib/config");
+  const fernando = PESSOAS.find((p) => p.slug === "fernando")!;
+
+  // O bloco na planilha continua a chamar-se "Fernando" — é por aí que os
+  // lançamentos dele são encontrados.
+  assert.ok(fernando.rotulos.includes("fernando"));
+
+  const linhas = [CABECALHO, item("", "Coberta", "63,91", "", "", "Fernando")];
+  const a = aba("Outubro", linhas, [{ linhaIni: 1, linhaFim: 2, colIni: 10, colFim: 11 }]);
+  const { porPessoa } = await extrairLancamentos([a]);
+  assert.equal(porPessoa.get("fernando")!.length, 1);
+
+  // Mas o painel trata-o pelo nome escolhido.
+  assert.equal(fernando.nome, "Amor");
+  assert.equal(fernando.saudacao, "Oi, amor");
+});

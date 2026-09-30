@@ -11,7 +11,8 @@
 export const PESSOAS = [
   { slug: "mae",      nome: "Mãe",      saudacao: "Oi, mãe",      rotulos: ["mae", "mãe"] },
   { slug: "ulisses",  nome: "Ulisses",  saudacao: "Oi, Ulisses",  rotulos: ["ulisses"] },
-  { slug: "fernando", nome: "Fernando", saudacao: "Oi, Fernando", rotulos: ["fernando"] },
+  // O bloco na planilha diz "Fernando"; o painel dele trata-o por outro nome.
+  { slug: "fernando", nome: "Amor", saudacao: "Oi, amor", rotulos: ["fernando"] },
   { slug: "heloisa",  nome: "Heloiza",  saudacao: "Oi, Heloiza",  rotulos: ["heloiza", "heloisa"] },
   { slug: "vo",       nome: "Vó",       saudacao: "Oi, vó",       rotulos: ["vo", "vó"] },
 ] as const;

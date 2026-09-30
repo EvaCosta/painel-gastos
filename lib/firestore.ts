@@ -160,10 +160,15 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
 
   const atualizadoEm = dados.atualizadoEm?.toDate?.() as Date | undefined;
 
+  // O nome vem da configuração, não do que está gravado: é uma escolha de
+  // apresentação, e assim mudá-la tem efeito no deploy seguinte, sem esperar
+  // por um sync. O gravado fica como recurso se alguém for tirado da lista.
+  const pessoa = PESSOAS.find((p) => p.slug === slug);
+
   return {
     slug,
-    nome: String(dados.nome ?? slug),
-    saudacao: String(dados.saudacao ?? `Oi, ${dados.nome ?? slug}`),
+    nome: pessoa?.nome ?? String(dados.nome ?? slug),
+    saudacao: pessoa?.saudacao ?? String(dados.saudacao ?? `Oi, ${dados.nome ?? slug}`),
     meses: [...porMes.values()].sort((a, b) => b.ordem - a.ordem),
     total: Number(dados.totalAberto ?? 0),
     totalPago: Number(dados.totalPago ?? 0),
@@ -179,7 +184,7 @@ export async function carregarResumo() {
       const x = d.data();
       return {
         slug: d.id,
-        nome: String(x.nome ?? d.id),
+        nome: PESSOAS.find((p) => p.slug === d.id)?.nome ?? String(x.nome ?? d.id),
         token: String(x.token ?? ""),
         totalAberto: Number(x.totalAberto ?? 0),
         totalPago: Number(x.totalPago ?? 0),
