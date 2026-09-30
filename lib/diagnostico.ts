@@ -1,4 +1,4 @@
-import { ABAS, DIA_VENCIMENTO, abaDaFaturaVigente } from "./config";
+import { ABAS, DIA_VENCIMENTO, abaDaFaturaVigente, variavel } from "./config";
 
 /** Um ID de planilha do Google tem sempre este comprimento. */
 const TAMANHO_DO_ID = 44;
@@ -11,10 +11,10 @@ export type Linha = { rotulo: string; valor: string; ok: boolean | null };
  * da conta de serviço está na lista de partilhas dela.
  */
 export function diagnosticoDaConfiguracao(): Linha[] {
-  const id = process.env.PLANILHA_ID ?? "";
+  const id = variavel("PLANILHA_ID") ?? "";
   const email =
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL || "";
-  const temChave = Boolean(process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY);
+    variavel("GOOGLE_SERVICE_ACCOUNT_EMAIL") ?? variavel("FIREBASE_CLIENT_EMAIL") ?? "";
+  const temChave = Boolean(variavel("GOOGLE_PRIVATE_KEY") ?? variavel("FIREBASE_PRIVATE_KEY"));
 
   return [
     {

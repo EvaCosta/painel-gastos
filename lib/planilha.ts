@@ -1,5 +1,5 @@
 import { JWT } from "google-auth-library";
-import { ABAS, COLUNAS, FRASES_DE_PAGO, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS } from "./config";
+import { ABAS, COLUNAS, FRASES_DE_PAGO, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS, variavel } from "./config";
 import { lerChavePrivada } from "./chave";
 import { chave, dataNoTexto, idDaLinha, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
@@ -27,14 +27,14 @@ function hex({ red = 0, green = 0, blue = 0 }: Cor): string {
  * devolve só texto, e aqui a estrutura vive nas fusões da coluna "Nome".
  */
 export async function lerPlanilha(): Promise<Aba[]> {
-  const id = process.env.PLANILHA_ID;
+  const id = variavel("PLANILHA_ID");
 
   // A conta de serviço do Firebase é a mesma que lê a planilha: o projeto
   // Firebase É um projeto Google Cloud. Manter a chave em duas variáveis só
   // dá hipótese de uma delas ficar mal colada, por isso as GOOGLE_* são
   // opcionais e, faltando, usam-se as do Firebase.
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL;
-  const chavePrivada = process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY;
+  const email = variavel("GOOGLE_SERVICE_ACCOUNT_EMAIL") ?? variavel("FIREBASE_CLIENT_EMAIL");
+  const chavePrivada = variavel("GOOGLE_PRIVATE_KEY") ?? variavel("FIREBASE_PRIVATE_KEY");
 
   const emFalta = [
     ["PLANILHA_ID", id],
@@ -54,7 +54,7 @@ export async function lerPlanilha(): Promise<Aba[]> {
     email,
     key: lerChavePrivada(
       chavePrivada,
-      process.env.GOOGLE_PRIVATE_KEY ? "GOOGLE_PRIVATE_KEY" : "FIREBASE_PRIVATE_KEY",
+      variavel("GOOGLE_PRIVATE_KEY") ? "GOOGLE_PRIVATE_KEY" : "FIREBASE_PRIVATE_KEY",
     ),
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });

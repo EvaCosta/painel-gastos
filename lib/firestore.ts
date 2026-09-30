@@ -1,7 +1,7 @@
 import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { lerChavePrivada } from "./chave";
-import { PESSOAS } from "./config";
+import { PESSOAS, variavel } from "./config";
 import type { Lancamento, Mes, Painel } from "./tipos";
 
 /**
@@ -20,9 +20,9 @@ export function db(): Firestore {
   const jaExistia = getApps().length > 0;
 
   if (!jaExistia) {
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    const projectId = variavel("FIREBASE_PROJECT_ID");
+    const clientEmail = variavel("FIREBASE_CLIENT_EMAIL");
+    const privateKey = variavel("FIREBASE_PRIVATE_KEY");
 
     const emFalta = [
       ["FIREBASE_PROJECT_ID", projectId],

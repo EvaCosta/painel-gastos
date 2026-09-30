@@ -46,13 +46,42 @@ export const FRASES_DE_PAGO = ["dinheiro esta comigo", "dinheiro comigo"];
 export const ROTULOS_IGNORADOS = ["mercado", "viagem jf", "nome", "total", "soma geral"];
 
 /**
+ * Lê uma variável de ambiente, tolerando o nome dela colado ao valor.
+ *
+ * Colar `PLANILHA_ID=167mQ...` no campo do valor de um painel de configuração
+ * guarda a linha toda, e o erro que daí vem — um 404 do Google — não aponta
+ * para nada. Como nenhum valor legítimo começa pelo nome da própria variável,
+ * dá para o tirar sem risco.
+ */
+export function variavel(nome: string): string | undefined {
+  const bruto = process.env[nome];
+  if (bruto === undefined) return undefined;
+
+  // O nome só sai se vier seguido de um separador ou de espaço. Sem isso,
+  // um valor que por acaso comece pelo nome — "PLANILHA_IDX" — era decepado.
+  const semPrefixo = bruto
+    .trim()
+    .replace(new RegExp(`^${nome}(?:\\s*[=:]\\s*|\\s+)`), "")
+    .trim();
+
+  // Aspas à volta, de quem copiou o valor com elas.
+  const semAspas =
+    (semPrefixo.startsWith('"') && semPrefixo.endsWith('"')) ||
+    (semPrefixo.startsWith("'") && semPrefixo.endsWith("'"))
+      ? semPrefixo.slice(1, -1)
+      : semPrefixo;
+
+  return semAspas || undefined;
+}
+
+/**
  * Fuso em que se decide qual é o mês vigente — a virada do mês tem de
  * acontecer à meia-noite de quem usa isto, não em UTC.
  */
-export const FUSO = process.env.FUSO ?? "America/Sao_Paulo";
+export const FUSO = variavel("FUSO") ?? "America/Sao_Paulo";
 
 /** Dia em que a fatura vence. */
-export const DIA_VENCIMENTO = Number(process.env.DIA_VENCIMENTO ?? 15);
+export const DIA_VENCIMENTO = Number(variavel("DIA_VENCIMENTO") ?? 15);
 
 /**
  * A aba da próxima fatura a vencer, que é a que interessa a quem deve.
@@ -89,8 +118,9 @@ export function abaDaFaturaVigente(quando = new Date()): string {
  * `PLANILHA_ABAS` força uma lista fixa, para ver meses anteriores ou vários
  * de uma vez: `PLANILHA_ABAS=Setembro,Outubro`.
  */
-export const ABAS = process.env.PLANILHA_ABAS
-  ? process.env.PLANILHA_ABAS.split(",").map((s) => s.trim()).filter(Boolean)
+const abasPedidas = variavel("PLANILHA_ABAS");
+export const ABAS = abasPedidas
+  ? abasPedidas.split(",").map((s) => s.trim()).filter(Boolean)
   : [abaDaFaturaVigente()];
 
 /** Cabeçalhos da secção de pessoas, em minúsculas e sem acentos. */
