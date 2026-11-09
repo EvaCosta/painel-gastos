@@ -84,6 +84,24 @@ export const FUSO = variavel("FUSO") ?? "America/Sao_Paulo";
 /** Dia em que a fatura vence. */
 export const DIA_VENCIMENTO = Number(variavel("DIA_VENCIMENTO") ?? 15);
 
+const MESES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+/** Ano e mês (0–11) da fatura vigente, no fuso de quem usa isto. */
+function faturaVigente(quando: Date): { ano: number; mes: number } {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: FUSO, year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(quando);
+  const parte = (tipo: string) => Number(partes.find((p) => p.type === tipo)!.value);
+
+  // Passado o vencimento, a fatura deste mês está fechada: conta a seguinte.
+  const avanco = parte("day") > DIA_VENCIMENTO ? 1 : 0;
+  const indice = parte("year") * 12 + parte("month") - 1 + avanco;
+  return { ano: Math.floor(indice / 12), mes: indice % 12 };
+}
+
 /**
  * A aba da próxima fatura a vencer, que é a que interessa a quem deve.
  *
@@ -97,32 +115,62 @@ export const DIA_VENCIMENTO = Number(variavel("DIA_VENCIMENTO") ?? 15);
  * anteriores levam sufixo ("Outubro25") e ficam de fora, como se quer.
  */
 export function abaDaFaturaVigente(quando = new Date()): string {
-  const partes = new Intl.DateTimeFormat("en-CA", {
-    timeZone: FUSO, year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(quando);
-  const parte = (tipo: string) => Number(partes.find((p) => p.type === tipo)!.value);
+  return MESES[faturaVigente(quando).mes];
+}
 
-  const dia = parte("day");
-  // Passado o vencimento, a fatura deste mês está fechada: conta a seguinte.
-  const avanco = dia > DIA_VENCIMENTO ? 1 : 0;
-  const referencia = new Date(Date.UTC(parte("year"), parte("month") - 1 + avanco, 1));
+/** Quantas faturas depois da vigente se mostram. 0 desliga. */
+export const MESES_SEGUINTES = Math.min(
+  11,
+  Math.max(0, Number(variavel("MESES_SEGUINTES") ?? 11) || 0),
+);
 
-  const mes = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" })
-    .format(referencia);
-  return mes.charAt(0).toUpperCase() + mes.slice(1);
+/**
+ * As faturas a seguir à vigente — as parcelas que ainda vão cair —, cada uma
+ * com os nomes que a sua aba pode ter, pela ordem em que se procuram.
+ *
+ * No mesmo ano da vigente a aba não tem sufixo ("Dezembro"). No ano seguinte
+ * aceita-se só com sufixo ("Janeiro27", "Janeiro 27", "Janeiro2027"): sem ele,
+ * "Janeiro" é a aba de Janeiro DESTE ano, já passada, e mostrá-la como próxima
+ * punha à frente da pessoa dívidas velhas como se fossem novas.
+ *
+ * Não passa de 11 meses, para nunca chegar ao mesmo mês do ano seguinte.
+ */
+export function abasDosMesesSeguintes(
+  quando = new Date(),
+  quantos = MESES_SEGUINTES,
+): string[][] {
+  const vigente = faturaVigente(quando);
+  const resultado: string[][] = [];
+
+  for (let i = 1; i <= Math.min(quantos, 11); i++) {
+    const indice = vigente.ano * 12 + vigente.mes + i;
+    const ano = Math.floor(indice / 12);
+    const nome = MESES[indice % 12];
+
+    if (ano === vigente.ano) {
+      resultado.push([nome]);
+    } else {
+      const aa = String(ano % 100).padStart(2, "0");
+      resultado.push([`${nome}${aa}`, `${nome} ${aa}`, `${nome}${ano}`]);
+    }
+  }
+  return resultado;
 }
 
 /**
- * Abas a ler. Por omissão, só a da próxima fatura a vencer — é o que os
- * painéis mostram, e vira sozinha todos os meses sem se mexer em nada.
+ * Abas a ler. Por omissão, a da próxima fatura a vencer — é o total que os
+ * painéis mostram, e vira sozinha todos os meses sem se mexer em nada — e,
+ * à parte, as dos meses seguintes que já existam na planilha.
  *
  * `PLANILHA_ABAS` força uma lista fixa, para ver meses anteriores ou vários
- * de uma vez: `PLANILHA_ABAS=Setembro,Outubro`.
+ * de uma vez: `PLANILHA_ABAS=Setembro,Outubro`. Com ela não há meses seguintes.
  */
 const abasPedidas = variavel("PLANILHA_ABAS");
 export const ABAS = abasPedidas
   ? abasPedidas.split(",").map((s) => s.trim()).filter(Boolean)
   : [abaDaFaturaVigente()];
+
+export const ABAS_SEGUINTES: string[][] = abasPedidas ? [] : abasDosMesesSeguintes();
 
 /** Cabeçalhos da secção de pessoas, em minúsculas e sem acentos. */
 export const COLUNAS = {

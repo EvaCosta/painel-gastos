@@ -69,13 +69,21 @@ export async function gravarPessoa(
   const idsNovos = new Set(lancamentos.map((l) => l.id));
   const aRemover = [...idsAntigos].filter((id) => !idsNovos.has(id));
 
+  // Os totais são da fatura vigente. Os meses seguintes têm o seu à parte:
+  // são parcelas que ainda não venceram, e somá-las ao que se deve agora
+  // fazia o número de cima crescer sem a pessoa ter comprado nada de novo.
+  const vigentes = lancamentos.filter((l) => !l.proximo);
+
   // Uma linha sai do saldo de duas maneiras: marcada como paga na planilha, ou
   // lançada com valor negativo (um acerto escrito como abatimento).
-  const emAberto = lancamentos.filter((l) => !l.pago);
+  const emAberto = vigentes.filter((l) => !l.pago);
   const totalAberto = emAberto.reduce((s, l) => s + l.valor, 0);
   const totalPago =
-    lancamentos.filter((l) => l.pago).reduce((s, l) => s + l.valor, 0) -
+    vigentes.filter((l) => l.pago).reduce((s, l) => s + l.valor, 0) -
     emAberto.filter((l) => l.valor < 0).reduce((s, l) => s + l.valor, 0);
+  const totalProximos = lancamentos
+    .filter((l) => l.proximo && !l.pago)
+    .reduce((s, l) => s + l.valor, 0);
 
   // O Firestore aceita 500 operações por lote.
   let lote = firestore.batch();
@@ -99,6 +107,7 @@ export async function gravarPessoa(
       saudacao: pessoa.saudacao,
       totalAberto,
       totalPago,
+      totalProximos,
       emAberto: emAberto.filter((l) => l.valor > 0).length,
       atualizadoEm: FieldValue.serverTimestamp(),
     },
@@ -138,7 +147,7 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
     .get();
 
   // Agrupar por mês, mantendo a ordem das abas da planilha.
-  const porMes = new Map<string, Mes>();
+  const porMes = new Map<string, Mes & { proximo: boolean }>();
   const lancamentos = docs.docs
     .map((d) => d.data() as Lancamento)
     .sort((a, b) => b.ordemMes - a.ordemMes || a.linha - b.linha);
@@ -146,7 +155,10 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
   for (const l of lancamentos) {
     let mes = porMes.get(l.mes);
     if (!mes) {
-      mes = { nome: l.mes, ordem: l.ordemMes, abertos: [], pagos: [], total: 0, totalPago: 0 };
+      mes = {
+        nome: l.mes, ordem: l.ordemMes, proximo: Boolean(l.proximo),
+        abertos: [], pagos: [], total: 0, totalPago: 0,
+      };
       porMes.set(l.mes, mes);
     }
     if (l.pago) {
@@ -165,13 +177,20 @@ export async function carregarPainel(slug: string): Promise<Painel | null> {
   // por um sync. O gravado fica como recurso se alguém for tirado da lista.
   const pessoa = PESSOAS.find((p) => p.slug === slug);
 
+  const todos = [...porMes.values()].map(({ proximo, ...mes }) => ({ proximo, mes }));
+  const proximos = todos.filter((m) => m.proximo).map((m) => m.mes)
+    .sort((a, b) => a.ordem - b.ordem);
+
   return {
     slug,
     nome: pessoa?.nome ?? String(dados.nome ?? slug),
     saudacao: pessoa?.saudacao ?? String(dados.saudacao ?? `Oi, ${dados.nome ?? slug}`),
-    meses: [...porMes.values()].sort((a, b) => b.ordem - a.ordem),
+    meses: todos.filter((m) => !m.proximo).map((m) => m.mes)
+      .sort((a, b) => b.ordem - a.ordem),
     total: Number(dados.totalAberto ?? 0),
     totalPago: Number(dados.totalPago ?? 0),
+    proximos,
+    totalProximos: proximos.reduce((s, m) => s + m.total, 0),
     atualizadoEm: atualizadoEm ? atualizadoEm.toISOString() : null,
   };
 }
@@ -188,6 +207,7 @@ export async function carregarResumo() {
         token: String(x.token ?? ""),
         totalAberto: Number(x.totalAberto ?? 0),
         totalPago: Number(x.totalPago ?? 0),
+        totalProximos: Number(x.totalProximos ?? 0),
         emAberto: Number(x.emAberto ?? 0),
         atualizadoEm: (x.atualizadoEm?.toDate?.() as Date | undefined)?.toISOString() ?? null,
       };

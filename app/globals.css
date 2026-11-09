@@ -136,3 +136,22 @@ footer strong { color:var(--ink-2); font-weight:600; }
 .sinal { font-weight:700; flex:none; line-height:1.5; }
 .sinal.ok { color:var(--paid); }
 .sinal.mau { color:var(--open); }
+
+.proximos { border:1px solid var(--line-soft); border-radius:12px; padding:0 16px; }
+.proximos > summary {
+  list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:14px 0; font-weight:600;
+}
+.proximos > summary::-webkit-details-marker { display:none; }
+.proximos > summary::before {
+  content:""; flex:none; width:7px; height:7px; margin-right:2px;
+  border-right:2px solid var(--ink-3); border-bottom:2px solid var(--ink-3);
+  transform:rotate(-45deg); transition:transform .15s ease;
+}
+.proximos[open] > summary::before { transform:rotate(45deg); }
+.proximos > summary:focus-visible { outline:2px solid var(--accent, var(--paid)); outline-offset:2px; border-radius:6px; }
+.proximos-titulo { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.proximos-sub { font-size:13px; font-weight:400; color:var(--ink-3); overflow-wrap:anywhere; }
+.proximos[open] { padding-bottom:16px; }
+.proximos > .note { margin:0 0 16px; }
+.proximos > div + div { margin-top:24px; }

@@ -20,6 +20,12 @@ export type Lancamento = {
   pago: boolean;
   /** Quando acertou, como está escrito na planilha ("15/09"). Vazio se não disser. */
   pagoEm: string;
+  /**
+   * Vem da fatura de um mês a seguir ao vigente: parcela que ainda vai cair.
+   * Não conta para o total em aberto. Ausente nos lançamentos gravados antes
+   * de isto existir, que eram todos da fatura vigente.
+   */
+  proximo?: boolean;
 };
 
 export type Mes = {
@@ -42,6 +48,10 @@ export type Painel = {
   meses: Mes[];
   total: number;
   totalPago: number;
+  /** Faturas dos meses seguintes, da mais próxima para a mais distante. */
+  proximos: Mes[];
+  /** O que já está lançado nesses meses e ainda não foi acertado. */
+  totalProximos: number;
   atualizadoEm: string | null;
 };
 

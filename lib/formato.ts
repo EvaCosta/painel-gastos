@@ -26,3 +26,14 @@ export const fmtDia = (iso: string) => maiuscula(diaLongo.format(emDia(iso)));
 export const fmtMes = (iso: string) => maiuscula(mesLongo.format(emDia(iso)));
 export const fmtDiaCurto = (iso: string) => maiuscula(diaCurto.format(emDia(iso)).replace(".", ""));
 export const fmtMomento = (iso: string) => momento.format(new Date(iso));
+
+/**
+ * O nome da aba como se lê: "Janeiro27" e "Janeiro 27" passam a
+ * "Janeiro 2027". As do ano corrente não têm sufixo e ficam como estão.
+ */
+export function fmtAba(aba: string): string {
+  const m = aba.trim().match(/^(.*?)\s*(\d{2}|\d{4})$/);
+  if (!m || !m[1]) return aba;
+  const ano = m[2].length === 2 ? `20${m[2]}` : m[2];
+  return `${m[1]} ${ano}`;
+}
