@@ -73,7 +73,7 @@ export default async function Admin({ params }: { params: Promise<{ token: strin
         <table className="table">
           <thead>
             <tr>
-              <th>Pessoa</th><th>Em aberto</th><th>Itens</th><th>Já pago</th><th>Atualizado</th>
+              <th>Pessoa</th><th>Em aberto</th><th>Itens</th><th>Já pago</th><th>Próximos meses</th><th>Atualizado</th>
             </tr>
           </thead>
           <tbody>
@@ -83,6 +83,7 @@ export default async function Admin({ params }: { params: Promise<{ token: strin
                 <td className="num">{fmtDinheiro(p.totalAberto)}</td>
                 <td className="num">{p.emAberto}</td>
                 <td className="num">{fmtDinheiro(p.totalPago)}</td>
+                <td className="num">{fmtDinheiro(p.totalProximos)}</td>
                 <td>{p.atualizadoEm ? fmtMomento(p.atualizadoEm) : "—"}</td>
               </tr>
             ))}

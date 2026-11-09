@@ -40,3 +40,27 @@ test("cobre os doze meses", () => {
     assert.equal(abaDaFaturaVigente(em(`2026-${mm}-10`)), esperado[m - 1]);
   }
 });
+
+test("meses seguintes: no mesmo ano, a aba sem sufixo", async () => {
+  const { abasDosMesesSeguintes } = await import("../lib/config");
+  // 23 de Setembro: a vigente é Outubro, a seguir vêm Novembro e Dezembro.
+  assert.deepEqual(abasDosMesesSeguintes(em("2026-09-23"), 2), [["Novembro"], ["Dezembro"]]);
+});
+
+test("meses seguintes: no ano seguinte, só com sufixo — 'Janeiro' é o deste ano", async () => {
+  const { abasDosMesesSeguintes } = await import("../lib/config");
+  // 9 de Novembro: a vigente é Novembro.
+  assert.deepEqual(abasDosMesesSeguintes(em("2026-11-09"), 3), [
+    ["Dezembro"],
+    ["Janeiro27", "Janeiro 27", "Janeiro2027"],
+    ["Fevereiro27", "Fevereiro 27", "Fevereiro2027"],
+  ]);
+});
+
+test("meses seguintes: nunca chega ao mesmo mês do ano seguinte", async () => {
+  const { abasDosMesesSeguintes } = await import("../lib/config");
+  const lista = abasDosMesesSeguintes(em("2026-03-10"), 50);
+  assert.equal(lista.length, 11);
+  assert.deepEqual(lista.at(-1), ["Fevereiro27", "Fevereiro 27", "Fevereiro2027"]);
+  assert.deepEqual(abasDosMesesSeguintes(em("2026-03-10"), 0), []);
+});

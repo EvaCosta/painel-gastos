@@ -1,4 +1,4 @@
-import { ABAS, DIA_VENCIMENTO, abaDaFaturaVigente, variavel } from "./config";
+import { ABAS, ABAS_SEGUINTES, DIA_VENCIMENTO, abaDaFaturaVigente, variavel } from "./config";
 
 /** Um ID de planilha do Google tem sempre este comprimento. */
 const TAMANHO_DO_ID = 44;
@@ -29,6 +29,13 @@ export function diagnosticoDaConfiguracao(): Linha[] {
     },
     { rotulo: "Chave privada", valor: temChave ? "definida" : "em falta", ok: temChave },
     { rotulo: "Abas a ler", valor: ABAS.join(", "), ok: null },
+    {
+      rotulo: "Meses seguintes (lidos se a aba existir)",
+      valor: ABAS_SEGUINTES.length
+        ? ABAS_SEGUINTES.map((nomes) => nomes[0]).join(", ")
+        : "nenhum (PLANILHA_ABAS definida ou MESES_SEGUINTES=0)",
+      ok: null,
+    },
     {
       rotulo: "Fatura vigente",
       valor: `${abaDaFaturaVigente()} (vencimento a ${DIA_VENCIMENTO})`,

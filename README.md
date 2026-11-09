@@ -65,6 +65,17 @@ O leitor lê os dois formatos e conta tudo. Quando o seu total difere do
 declarado na coluna `Total`, o sync emite um aviso a dizer quanto e porquê, em
 vez de escolher um em silêncio.
 
+## Próximos meses
+
+Por baixo do total, cada painel tem uma secção fechada, **Ver os próximos
+meses**, com as parcelas já lançadas nas faturas seguintes. Não entram no total
+em aberto: cada uma passa para lá quando a sua fatura se torna a vigente.
+
+O sync lê as abas dos meses seguintes **que já existam**. No ano da fatura
+vigente a aba é só o mês (`Dezembro`); no ano seguinte tem de levar o ano
+(`Janeiro27`, `Janeiro 27` ou `Janeiro2027`), porque `Janeiro` sozinho é a aba
+deste ano, já passada. Com `PLANILHA_ABAS` definida não há meses seguintes.
+
 ## Instalação
 
 ```bash
@@ -134,6 +145,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/sync
 |---|---|
 | Acrescentar ou tirar uma pessoa | `lib/config.ts` → `PESSOAS` |
 | Ver outros meses | `.env` → `PLANILHA_ABAS=Setembro,Outubro` (vazio = automático) |
+| Quantos meses seguintes mostrar | `.env` → `MESES_SEGUINTES=3` (por omissão até 11; `0` desliga) |
 | Mudar o dia de vencimento | `.env` → `DIA_VENCIMENTO` |
 | Um rótulo novo que não é pessoa | `lib/config.ts` → `ROTULOS_IGNORADOS` |
 | Mudar de R$ para € | `lib/config.ts` → `MOEDA` |

@@ -1,5 +1,5 @@
 import { JWT } from "google-auth-library";
-import { ABAS, COLUNAS, FRASES_DE_PAGO, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS, variavel } from "./config";
+import { ABAS, ABAS_SEGUINTES, COLUNAS, FRASES_DE_PAGO, MARCAS_DE_PAGO, PESSOAS, ROTULOS_IGNORADOS, variavel } from "./config";
 import { lerChavePrivada } from "./chave";
 import { chave, dataNoTexto, idDaLinha, lerValor } from "./normalizar";
 import type { Lancamento } from "./tipos";
@@ -7,6 +7,8 @@ import type { Lancamento } from "./tipos";
 /** Uma aba, já reduzida ao que nos interessa. */
 export type Aba = {
   nome: string;
+  /** Fatura de um mês a seguir ao vigente: mostra-se à parte, fora do total. */
+  proximo?: boolean;
   /** `celulas[linha][coluna]` — 0-indexado, como a API devolve. */
   celulas: Array<Array<{ texto: string; cor: string } | null>>;
   /** Células fundidas, em índices 0-based semi-abertos. */
@@ -95,6 +97,12 @@ export async function lerPlanilha(): Promise<Aba[]> {
   );
 
   const existentes = ABAS.filter((a) => titulos.has(a));
+  // Dos meses seguintes, só os que a planilha já tem — e, de cada um, o
+  // primeiro nome que lá exista. Os que faltam não são erro: a aba de daqui a
+  // meio ano normalmente ainda não foi criada.
+  const seguintes = ABAS_SEGUINTES
+    .map((nomes) => nomes.find((n) => titulos.has(n)))
+    .filter((n): n is string => Boolean(n) && !existentes.includes(n!));
   if (!existentes.length) {
     throw new Error(
       `Nenhuma das abas pedidas existe na planilha: ${ABAS.join(", ")}. ` +
@@ -103,7 +111,9 @@ export async function lerPlanilha(): Promise<Aba[]> {
   }
 
   const params = new URLSearchParams({ includeGridData: "true" });
-  for (const aba of existentes) params.append("ranges", `${aba}!A:N`);
+  const aLer = [...existentes, ...seguintes];
+  // Entre plicas: "Janeiro 27" tem um espaço, e sem elas o intervalo não se lê.
+  for (const aba of aLer) params.append("ranges", `'${aba.replace(/'/g, "''")}'!A:N`);
   // Só os campos que usamos: a resposta completa desta planilha são muitos MB.
   params.set("fields", [
     "sheets.properties.title",
@@ -131,8 +141,20 @@ export async function lerPlanilha(): Promise<Aba[]> {
     }>;
   };
 
-  return (dados.sheets ?? []).map((folha) => ({
+  // A API devolve as abas pela ordem em que estão na planilha, não pela do
+  // pedido. Reordena-se pela nossa, que é cronológica, porque a ordem do mês
+  // sai daqui.
+  const posicao = (nome: string) => {
+    const i = aLer.indexOf(nome);
+    return i < 0 ? aLer.length : i;
+  };
+  const folhas = [...(dados.sheets ?? [])].sort(
+    (a, b) => posicao(a.properties?.title ?? "") - posicao(b.properties?.title ?? ""),
+  );
+
+  return folhas.map((folha) => ({
     nome: folha.properties?.title ?? "",
+    proximo: seguintes.includes(folha.properties?.title ?? ""),
     fusoes: (folha.merges ?? []).map((m) => ({
       linhaIni: m.startRowIndex ?? 0,
       linhaFim: m.endRowIndex ?? 0,
@@ -318,6 +340,7 @@ export async function extrairLancamentos(abas: Aba[]): Promise<{
           // compra foi feita não entra: é assunto de quem pagou, não de quem deve.
           pago: pagoEm.pago,
           pagoEm: pagoEm.data,
+          proximo: Boolean(aba.proximo),
         });
         lidas++;
       }

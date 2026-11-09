@@ -1,5 +1,5 @@
-import { fmtDinheiro, fmtMomento } from "@/lib/formato";
-import type { Lancamento, Painel as DadosPainel } from "@/lib/tipos";
+import { fmtDinheiro, fmtAba, fmtMomento } from "@/lib/formato";
+import type { Lancamento, Mes, Painel as DadosPainel } from "@/lib/tipos";
 
 function Pastilha({ pago }: { pago: boolean }) {
   return (
@@ -40,11 +40,44 @@ function Linha({ lancamento }: { lancamento: Lancamento }) {
   );
 }
 
+/** Um mês: o que está a pagar e, à parte, o que já foi acertado. */
+function BlocoMes({ mes, rotuloAberto }: { mes: Mes; rotuloAberto: string }) {
+  return (
+    <div>
+      {mes.abertos.length > 0 && (
+        <section className="ledger" aria-label={`${rotuloAberto} — ${fmtAba(mes.nome)}`}>
+          <h2 className="month">
+            <span>{fmtAba(mes.nome)} · {rotuloAberto.toLowerCase()}</span>
+            <span className="month-total">{fmtDinheiro(mes.total)}</span>
+          </h2>
+          <ul className="items">
+            {mes.abertos.map((l) => <Linha key={l.id} lancamento={l} />)}
+          </ul>
+        </section>
+      )}
+
+      {mes.pagos.length > 0 && (
+        <section className="ledger" aria-label={`Já acertado — ${fmtAba(mes.nome)}`}>
+          <h2 className="month settled">
+            <span>{fmtAba(mes.nome)} · já acertado</span>
+            <span className="month-total">{fmtDinheiro(mes.totalPago)}</span>
+          </h2>
+          <ul className="items">
+            {mes.pagos.map((l) => <Linha key={l.id} lancamento={l} />)}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export default function Painel({ dados, comoAcertar }: { dados: DadosPainel; comoAcertar?: string }) {
   // Mês mais recente primeiro — a ordem vem da posição da aba na planilha.
   const meses = [...dados.meses].sort((a, b) => b.ordem - a.ordem);
   const totalItens = meses.reduce((s, m) => s + m.abertos.filter((l) => l.valor > 0).length, 0);
   const temPagos = meses.some((m) => m.pagos.length > 0);
+  // Painéis gravados antes de haver meses seguintes não trazem o campo.
+  const proximos = (dados.proximos ?? []).filter((m) => m.abertos.length || m.pagos.length);
 
   return (
     <main className="wrap">
@@ -81,35 +114,30 @@ export default function Painel({ dados, comoAcertar }: { dados: DadosPainel; com
       </section>
 
       {meses.length > 0 ? (
-        meses.map((mes) => (
-          <div key={mes.nome}>
-            {mes.abertos.length > 0 && (
-              <section className="ledger" aria-label={`Em aberto — ${mes.nome}`}>
-                <h2 className="month">
-                  <span>{mes.nome} · a pagar</span>
-                  <span className="month-total">{fmtDinheiro(mes.total)}</span>
-                </h2>
-                <ul className="items">
-                  {mes.abertos.map((l) => <Linha key={l.id} lancamento={l} />)}
-                </ul>
-              </section>
-            )}
-
-            {mes.pagos.length > 0 && (
-              <section className="ledger" aria-label={`Já acertado — ${mes.nome}`}>
-                <h2 className="month settled">
-                  <span>{mes.nome} · já acertado</span>
-                  <span className="month-total">{fmtDinheiro(mes.totalPago)}</span>
-                </h2>
-                <ul className="items">
-                  {mes.pagos.map((l) => <Linha key={l.id} lancamento={l} />)}
-                </ul>
-              </section>
-            )}
-          </div>
-        ))
+        meses.map((mes) => <BlocoMes key={mes.nome} mes={mes} rotuloAberto="A pagar" />)
       ) : (
         <p className="note">Ainda não há lançamentos registados.</p>
+      )}
+
+      {proximos.length > 0 && (
+        // <details> abre e fecha sem JavaScript: a página continua a ser só
+        // HTML vindo do servidor, como o resto do painel.
+        <details className="proximos">
+          <summary>
+            <span className="proximos-titulo">
+              <span>Ver os próximos meses</span>
+              <span className="proximos-sub">
+                {proximos.map((m) => fmtAba(m.nome)).join(", ")} · ainda não venceram
+              </span>
+            </span>
+            <span className="month-total">{fmtDinheiro(dados.totalProximos)}</span>
+          </summary>
+          <p className="note">
+            Parcelas que já estão lançadas para as próximas faturas. Não entram no
+            total de cima — cada uma passa para lá quando chegar a fatura dela.
+          </p>
+          {proximos.map((mes) => <BlocoMes key={mes.nome} mes={mes} rotuloAberto="Vai cair" />)}
+        </details>
       )}
 
       {comoAcertar && (
